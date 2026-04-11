@@ -1,18 +1,25 @@
 /**
- * Punto único para conectar con el backend real.
- * Ese backend debería agregar datos de la API de GitHub (usuario / eventos / contribuciones),
- * no solo `git` en un repo local.
+ * Contrato con el backend: siempre se hace fetch a rutas HTTP (mismo origen por defecto).
  *
- * - Pon useMock: false y ajusta baseUrl / endpoints cuando tengas el API.
- * - Si el servidor usa otra ruta, solo cambia `endpoints.status`.
+ * - `baseUrl: ""` → URLs relativas (recomendado con `python main.py`: API y front en el mismo host).
+ * - Si el front se sirve en otro puerto/origen, pon aquí el origen del API, ej. "http://127.0.0.1:8000".
+ *
+ * Modo mock (sin backend): añade `?mock=1` a la URL de la página (solo desarrollo del UI).
  */
 export const API_CONFIG = {
-  baseUrl: "http://127.0.0.1:8000",
+  /** Origen del API; vacío = mismo origen que la página */
+  baseUrl: "",
   endpoints: {
     status: "/api/status",
   },
-  /** true = no hace fetch; usa datos ficticios con la misma forma que el API real */
-  useMock: true,
-  /** Simula latencia de red (ms) en modo mock */
+  /** Retraso simulado en modo `?mock=1` (ms) */
   mockDelayMs: 450,
 };
+
+/**
+ * @returns {boolean}
+ */
+export function isMockMode() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("mock") === "1";
+}

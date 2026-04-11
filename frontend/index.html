@@ -36,20 +36,17 @@
       </div>
 
       <p class="mock-hint" data-mock-hint hidden>
-        Modo <strong>mock</strong>: datos ficticios de actividad en GitHub. Con el API real, en
-        <code>js/config.js</code> pon <code>useMock: false</code> y ajusta <code>baseUrl</code> /
-        <code>endpoints.status</code>. El backend debe devolver <code>activity</code> con métricas
-        agregadas de tu usuario (p. ej. <code>contributions_last_24h</code>,
-        <code>contributions_last_7d</code>, <code>interactions_last_7d</code>). También se aceptan
-        nombres antiguos tipo <code>commits_last_24h</code> o <code>push_events_last_7d</code> —
-        ver <code>normalizeStatusPayload</code> en <code>js/api.js</code>.
+        Modo <strong>mock</strong> (<code>?mock=1</code>): datos ficticios sin llamar al API. En
+        uso normal, ejecutad <code>python main.py</code> y abrid la app sin ese parámetro. Contrato
+        del backend: <code>docs/BACKEND.md</code>. Mapeo de campos JSON:
+        <code>js/api.js</code> → <code>normalizeStatusPayload</code>.
       </p>
     </div>
 
     <script type="module">
-      import { API_CONFIG } from "./js/config.js";
+      import { isMockMode } from "./js/config.js";
       const hint = document.querySelector("[data-mock-hint]");
-      if (hint && API_CONFIG.useMock) hint.hidden = false;
+      if (hint && isMockMode()) hint.hidden = false;
     </script>
     <script src="js/app.js" type="module"></script>
   </body>

@@ -1,4 +1,4 @@
-import { API_CONFIG } from "./config.js";
+import { isMockMode } from "./config.js";
 import { fetchStatus } from "./api.js";
 import { renderError, renderStatus, setLoading } from "./ui.js";
 
@@ -19,9 +19,9 @@ async function refresh() {
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error desconocido";
     renderError(
-      API_CONFIG.useMock
-        ? `${msg} (revisa MOCK o normalizeStatusPayload en api.js)`
-        : `${msg}. ¿URL en config.js? ¿CORS y token GitHub en el backend?`,
+      isMockMode()
+        ? `${msg} (revisa MOCK en api.js o normalizeStatusPayload)`
+        : `${msg}. ¿Backend en marcha (python main.py)? ¿CORS si usas otro origen?`,
       root,
     );
   } finally {

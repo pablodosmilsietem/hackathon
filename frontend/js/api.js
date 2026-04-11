@@ -1,4 +1,4 @@
-import { API_CONFIG } from "./config.js";
+import { API_CONFIG, isMockMode } from "./config.js";
 
 /**
  * Actividad agregada en tu cuenta de GitHub (no un repo local concreto).
@@ -98,10 +98,11 @@ function toNonNegInt(value) {
 }
 
 function buildStatusUrl() {
-  const base = API_CONFIG.baseUrl.replace(/\/$/, "");
   const path = API_CONFIG.endpoints.status.startsWith("/")
     ? API_CONFIG.endpoints.status
     : `/${API_CONFIG.endpoints.status}`;
+  const base = API_CONFIG.baseUrl.replace(/\/$/, "");
+  if (!base) return path;
   return `${base}${path}`;
 }
 
@@ -114,7 +115,7 @@ function delay(ms) {
  * @returns {Promise<StatusPayload>}
  */
 export async function fetchStatus() {
-  if (API_CONFIG.useMock) {
+  if (isMockMode()) {
     await delay(API_CONFIG.mockDelayMs);
     return normalizeStatusPayload(MOCK_STATUS);
   }
