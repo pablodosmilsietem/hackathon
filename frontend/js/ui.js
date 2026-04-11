@@ -5,7 +5,7 @@
 /** @type {Record<'happy'|'neutral'|'angry', string>} */
 export const MOOD_EMOJI = {
   happy: "😺",
-  neutral: "😐",
+  neutral: "😼",
   angry: "😾",
 };
 
