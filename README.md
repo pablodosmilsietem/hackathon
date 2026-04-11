@@ -1,8 +1,20 @@
-# Tamagotchi Git — Hackathon de productividad
+# Tamagotchi GitHub — Hackathon de productividad
 
-Proyecto de hackathon tipo **Tamagotchi** ligado a **Git**: la mascota refleja tu ritmo de trabajo según commits (y, más adelante, pushes u otras métricas). Si llevas tiempo sin commitear, “se enfada”; si hay buena actividad, está contenta.
+Mascota tipo **Tamagotchi** cuyo humor refleja **actividad agregada en GitHub** (definida por el backend). El **frontend solo habla con una API HTTP** (`fetch`); el equipo puede cambiar la lógica del servidor sin tocar el JS, respetando el contrato JSON.
 
-Hay dos partes: un **backend en Python** (API que lee el repositorio con Git) y un **frontend** (página web que muestra la mascota y los datos).
+---
+
+## Arranque en un solo comando
+
+Con el venv activo y dependencias instaladas, **desde la raíz del repo**:
+
+```bash
+python main.py
+```
+
+Se abre el navegador en `http://127.0.0.1:8000/` con la UI y las peticiones van a `GET /api/status` en el mismo origen.
+
+Documentación del contrato y cómo montar el backend: **[docs/BACKEND.md](docs/BACKEND.md)**.
 
 ---
 
@@ -10,96 +22,67 @@ Hay dos partes: un **backend en Python** (API que lee el repositorio con Git) y 
 
 | Qué | Para qué |
 |-----|----------|
-| **Python 3.10 o superior** (recomendado 3.11+) | Backend y herramientas (`venv`, `pip`) |
-| **Git** instalado y en el `PATH` | El backend ejecutará comandos como `git log` sobre el repo que vigiles |
-| Navegador moderno | Para abrir el frontend |
+| **Python 3.10+** (recomendado 3.11+) | Backend y `venv` |
+| **Navegador moderno** | Interfaz Tamagotchi |
 
-No hace falta instalar Node.js si sirves el HTML/CSS/JS con el servidor estático de Python (ver más abajo).
+Node.js **no** es necesario para el front en desarrollo (se sirve con FastAPI).
 
 ---
 
-## Entorno virtual de Python (obligatorio recomendado)
+## Entorno virtual e instalación
 
-Así no mezclas las librerías de este proyecto con las del sistema u otros proyectos.
+Desde la raíz del proyecto (`hackathon/`):
 
-Desde la **carpeta raíz del repo** (`hackathon/`):
-
-**Linux y macOS**
+**Linux / macOS**
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-**Windows (PowerShell o CMD)**
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-Cuando el entorno está activo, el prompt suele mostrar `(.venv)`. Para salir más tarde: `deactivate`.
-
----
-
-## Instalar las librerías de Python
-
-Con el entorno virtual **activado**:
-
-```bash
 pip install --upgrade pip
 pip install -r backend/requirements.txt
 ```
 
-### Qué instala `requirements.txt`
+**Windows**
 
-| Paquete | Uso en el proyecto |
-|---------|-------------------|
-| **fastapi** | Framework para la API REST |
-| **uvicorn** | Servidor ASGI para ejecutar FastAPI (`uvicorn ...`) |
-| **pydantic-settings** | Leer configuración desde variables de entorno (por ejemplo ruta del repo Git) |
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install --upgrade pip
+pip install -r backend/requirements.txt
+```
 
 ---
 
-## Configuración opcional
+## Dependencias Python (`backend/requirements.txt`)
 
-Puedes copiar el ejemplo de variables de entorno:
-
-```bash
-cp .env.example .env
-```
-
-Edita `.env` y, si quieres vigilar **otro** repositorio (no la carpeta del hackathon), descomenta y ajusta `GIT_REPO_PATH` con la ruta absoluta a ese repo.
+| Paquete | Uso |
+|---------|-----|
+| **fastapi** | API REST |
+| **uvicorn** | Servidor ASGI |
+| **pydantic-settings** | Variables de entorno (opcional; GitHub token, etc.) |
 
 ---
 
-## Cómo ejecutar (cuando el backend esté implementado)
+## Frontend y API
 
-Con el venv activo y desde la raíz del proyecto:
-
-```bash
-uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-El API quedará en `http://127.0.0.1:8000` (la documentación interactiva de FastAPI suele estar en `/docs`).
-
-**Frontend estático** (otra terminal):
-
-```bash
-cd frontend
-python3 -m http.server 5500
-```
-
-Abre `http://127.0.0.1:5500` en el navegador. Si el JavaScript llama al API, revisa que la URL del backend en el front coincida con el puerto donde corre `uvicorn`.
+- **`frontend/js/config.js`**: `baseUrl` vacío = mismo origen que la página (recomendado con `python main.py`). Si el API está en otro host, pon aquí su URL.
+- **Mock sin backend**: abre la app con **`?mock=1`** en la URL (datos ficticios en `frontend/js/api.js`).
 
 ---
 
-## Estructura del repo (resumen)
+## Estructura del repo
 
-- `backend/` — código Python (API, lectura de Git, lógica del “humor”).
-- `backend/requirements.txt` — lista de librerías para `pip install -r`.
-- `frontend/` — HTML, CSS y JS de la interfaz tipo Tamagotchi.
-- `.env.example` — plantilla de variables de entorno.
-- `.gitignore` — archivos que no deben subirse al repo (por ejemplo `.venv/`, `.env`).
+| Ruta | Contenido |
+|------|-----------|
+| `main.py` | Entrada: API + estáticos + abrir navegador |
+| `backend/main.py` | FastAPI: rutas `/api/*` y montaje de `frontend/` |
+| `frontend/` | HTML, CSS, JS |
+| `docs/BACKEND.md` | Contrato HTTP/JSON para quien implementa el backend |
+| `.env.example` | Plantilla de variables (token GitHub, etc.) |
 
-Si el archivo `backend/main.py` aún no tiene la app FastAPI, los comandos de `uvicorn` fallarán hasta que esté creado el punto de entrada de la API.
+---
+
+## Más ayuda
+
+- Contrato detallado, CORS y GitHub: [docs/BACKEND.md](docs/BACKEND.md).
+- API interactiva con el servidor en marcha: `http://127.0.0.1:8000/docs`.
