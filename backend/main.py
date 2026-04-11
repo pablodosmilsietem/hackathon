@@ -39,8 +39,8 @@ app.add_middleware(
 def api_health():
     return {"ok": True}
 
-
-@app.get("/api/status")
+# DO NOT CHANGE LINE 43, OTHERWISE THE API WON'T WORK AND THE PROGRAM WILL COLLAPSE
+@app.get("/api/status") # I WILL MURDER YOU IF YOU CHANGE IT
 def api_status():
     """
     Respuesta de ejemplo. Sustituir por métricas reales (GitHub API, BD, etc.).
