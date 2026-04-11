@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tamagotchi GitHub</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="app" data-app>
+      <header class="app__header">
+        <h1 class="app__title">Tamagotchi GitHub</h1>
+        <p class="app__subtitle">
+          Humor según tu <strong>actividad general en GitHub</strong> (toda tu cuenta), no un solo
+          repositorio local
+        </p>
+      </header>
+
+      <div class="device">
+        <div class="device__screen">
+          <span class="mood-badge" data-mood-badge aria-hidden="true">—</span>
+          <div class="pet" data-pet role="img" aria-label="Mascota">🥚</div>
+          <p class="mood-text" data-mood-text aria-live="polite">Cargando…</p>
+          <dl class="stats">
+            <dt>Contribuciones GitHub (~24 h)</dt>
+            <dd data-stat-github-24>—</dd>
+            <dt>Contribuciones GitHub (7 d)</dt>
+            <dd data-stat-github-7>—</dd>
+            <dt>Interacciones GitHub (7 d)</dt>
+            <dd data-stat-github-interactions-7>—</dd>
+          </dl>
+        </div>
+        <div class="device__actions">
+          <button type="button" class="btn" data-action-refresh>Actualizar</button>
+        </div>
+      </div>
+
+      <p class="mock-hint" data-mock-hint hidden>
+        Modo <strong>mock</strong>: datos ficticios de actividad en GitHub. Con el API real, en
+        <code>js/config.js</code> pon <code>useMock: false</code> y ajusta <code>baseUrl</code> /
+        <code>endpoints.status</code>. El backend debe devolver <code>activity</code> con métricas
+        agregadas de tu usuario (p. ej. <code>contributions_last_24h</code>,
+        <code>contributions_last_7d</code>, <code>interactions_last_7d</code>). También se aceptan
+        nombres antiguos tipo <code>commits_last_24h</code> o <code>push_events_last_7d</code> —
+        ver <code>normalizeStatusPayload</code> en <code>js/api.js</code>.
+      </p>
+    </div>
+
+    <script type="module">
+      import { API_CONFIG } from "./js/config.js";
+      const hint = document.querySelector("[data-mock-hint]");
+      if (hint && API_CONFIG.useMock) hint.hidden = false;
+    </script>
+    <script src="js/app.js" type="module"></script>
+  </body>
+</html>
