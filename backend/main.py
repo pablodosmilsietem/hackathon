@@ -351,6 +351,7 @@ def _mood_from_activity(activity: dict[str, int]) -> dict[str, str]:
         "message": f"Últimos 7 d: {c7} commits, {i7} interacciones. Tú puedes.",
     }
 
+
 @app.get("/api/status")
 def api_status(request: Request):
     """Con OAuth activo hace falta sesión; si no, se usan variables de entorno del servidor."""
