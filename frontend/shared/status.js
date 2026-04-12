@@ -27,6 +27,8 @@ export const MOOD_EMOJI = {
   happy: "😺",
   neutral: "😼",
   angry: "😾",
+  dead: "💀"
+
 };
 
 /** @type {Record<Mood, string>} */
@@ -34,9 +36,10 @@ export const MOOD_LABEL = {
   happy: "Contento",
   neutral: "Normal",
   angry: "Enfadado",
+  dead: "Muerto"
 };
 
-const MOOD_SET = new Set(["happy", "neutral", "angry"]);
+const MOOD_SET = new Set(["happy", "neutral", "angry", "dead"]);
 
 /**
  * @param {unknown} data

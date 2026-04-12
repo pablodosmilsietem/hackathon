@@ -241,6 +241,7 @@ def api_auth_device_status(request: Request):
             return {"status": "error", "message": "user_lookup_failed"}
         request.session["github_access_token"] = tok
         request.session["github_login"] = login
+        request.session["pet_birth"] = time.time()
         request.session.pop("github_device_code", None)
         request.session.pop("github_device_interval", None)
         request.session.pop("github_device_expires_at", None)
@@ -318,6 +319,7 @@ def auth_github_callback(
         login = fetch_github_login(access_token)
         request.session["github_access_token"] = access_token
         request.session["github_login"] = login
+        request.session["pet_birth"] = time.time()
     except Exception:
         request.session.pop("oauth_return_to", None)
         return RedirectResponse(url=_append_query(ret, "error", "token_exchange_failed"), status_code=302)
@@ -332,10 +334,26 @@ def auth_logout(request: Request, return_to: str | None = Query(default=None, ma
     return RedirectResponse(url=dest, status_code=302)
 
 
-def _mood_from_activity(activity: dict[str, int]) -> dict[str, str]:
+def _mood_from_activity(activity: dict[str, int], pet_birth: float | None = None) -> dict[str, str]:
     c24 = activity["contributions_last_24h"]
     c7 = activity["contributions_last_7d"]
     i7 = activity["interactions_last_7d"]
+    now = time.time()
+
+    if pet_birth: 
+        days_since_birth = (now-pet_birth) / 24* 60 * 60
+        if days_since_birth >= 7 and c7 == 0:
+            return {
+                "mood": "dead",
+                "message": "Has matado al gato :("
+            }
+
+    else:
+        if c7 == 0 and i7 == 0:
+            return {
+                "mood": "dead",
+                "message": "Has matado al gato :("
+            }
     if c7 >= 20 or c24 >= 8:
         return {
             "mood": "happy",
@@ -370,7 +388,8 @@ def api_status(request: Request):
         else:
             fetcher = GithubFetcher()
         activity = fetcher.activity_metrics(max_event_pages=15)
-        mood = _mood_from_activity(activity)
+        pet_birth = request.session.get("pet_birth")
+        mood = _mood_from_activity(activity, pet_birth)
         logger.info(
             "GET /api/status → mood=%s c7d=%s (ver líneas «GitHub» si hay ceros)",
             mood.get("mood"),
@@ -417,6 +436,15 @@ def api_status(request: Request):
             },
         }
     return {"activity": activity, "mood": mood}
+
+
+@app.post("/api/reset_pet")
+def api_reset_pet(request: Request):
+    # Resetting pet birth time to create a new pet
+    if not request.session.get("github_access_token"):
+        return JSONResponse(status_code=401, content={"detail": "not_authenticated"})
+    request.session["pet_birth"] = time.time()
+    return {"status": "pet_reset"}
 
 
 def _mount_frontend() -> None:

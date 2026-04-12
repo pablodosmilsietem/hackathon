@@ -7,6 +7,7 @@ const PET_SVG = {
   happy: "images/pet-happy.svg",
   neutral: "images/pet-neutral.svg",
   angry: "images/pet-angry.svg",
+  dead: "images/pet-error.svg"
 };
 
 const PET_ERROR = "images/pet-error.svg";
