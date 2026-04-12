@@ -24,6 +24,7 @@ Mascota según actividad en GitHub. **Ventana flotante:** `tamagotchi-float/` + 
 
 | Qué | Dónde |
 |-----|--------|
+| **Guía larga (arquitectura, OAuth, juego del gato, front, float, PyInstaller, Git)** | [`docs/GUIA_COMPLETA.md`](docs/GUIA_COMPLETA.md) |
 | **Contrato API, de dónde salen commits/contribuciones, JSON, funciones Python (`GithubFetcher`, filtrado)** | [`docs/BACKEND.md`](docs/BACKEND.md) (§3.3) |
 | Variables de entorno (plantilla sin secretos) | `.env.example` |
 | API interactiva | Con el servidor en marcha: `http://127.0.0.1:8000/docs` |
