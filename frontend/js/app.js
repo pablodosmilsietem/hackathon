@@ -370,7 +370,9 @@ function syncResetPetButton(data, root) {
   const btn = root.querySelector("[data-action-reset-pet]");
   const row = root.querySelector("[data-device-actions]");
   if (!(btn instanceof HTMLButtonElement)) return;
-  const show = data.mood.mood === "dead" && lastAuthStatus?.connected === true;
+  const localDead = root.getAttribute("data-pet-local-dead") === "true";
+  const show =
+    (data.mood.mood === "dead" || localDead) && lastAuthStatus?.connected === true;
   btn.hidden = !show;
   if (row instanceof HTMLElement) row.hidden = !show;
   if (!show) btn.disabled = false;

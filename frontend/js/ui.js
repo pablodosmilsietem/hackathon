@@ -61,22 +61,54 @@ function paintPetLiveFrame(root) {
   wrap.hidden = false;
   track.hidden = false;
 
+  const LIFE = ["pet--life-ok", "pet--life-warn", "pet--life-danger", "pet--life-sad"];
+
   if (rem <= 0) {
+    root.setAttribute("data-pet-local-dead", "true");
     label.textContent = "Sin tiempo de vida.";
     fill.style.width = "0%";
     wrap.classList.add("pet-timer--urgent");
-  } else {
-    label.textContent = `Te quedan ${formatMmSs(rem)} de vida · +${formatMmSs(bonus)} por commit`;
-    fill.style.width = `${Math.min(100, (rem / den) * 100)}%`;
-    wrap.classList.toggle("pet-timer--urgent", rem <= Math.max(30, Math.floor(initial / 5)));
+    if (pet instanceof HTMLElement) {
+      for (const c of LIFE) pet.classList.remove(c);
+      setPetImage(pet, PET_SVG.dead, MOOD_LABEL.dead);
+      pet.className = "pet pet--dead";
+      pet.dataset.mood = "dead";
+    }
+    const moodBadge = root.querySelector("[data-mood-badge]");
+    const moodText = root.querySelector("[data-mood-text]");
+    if (moodBadge) {
+      moodBadge.textContent = MOOD_LABEL.dead;
+      moodBadge.dataset.mood = "dead";
+      moodBadge.className = "mood-badge mood-badge--dead";
+    }
+    if (moodText) {
+      moodText.textContent = "Se acabó el tiempo de vida. Pulsa «Nuevo gato».";
+    }
+    const logoutRow = document.querySelector("[data-session-logout]");
+    const oauth = logoutRow instanceof HTMLElement && !logoutRow.hidden;
+    if (oauth) {
+      const btn = root.querySelector("[data-action-reset-pet]");
+      const row = root.querySelector("[data-device-actions]");
+      if (btn instanceof HTMLButtonElement) {
+        btn.hidden = false;
+        btn.disabled = false;
+      }
+      if (row instanceof HTMLElement) row.hidden = false;
+    }
+    return;
   }
+
+  root.removeAttribute("data-pet-local-dead");
+
+  label.textContent = `Te quedan ${formatMmSs(rem)} de vida · +${formatMmSs(bonus)} por commit`;
+  fill.style.width = `${Math.min(100, (rem / den) * 100)}%`;
+  wrap.classList.toggle("pet-timer--urgent", rem <= Math.max(30, Math.floor(initial / 5)));
 
   if (!(pet instanceof HTMLElement)) return;
 
-  const LIFE = ["pet--life-ok", "pet--life-warn", "pet--life-danger", "pet--life-sad"];
   for (const c of LIFE) pet.classList.remove(c);
 
-  if (baseMood === "dead" || rem <= 0) return;
+  if (baseMood === "dead") return;
 
   const ratio = rem / Math.max(initial, 60);
   const sadAbs = Math.max(18, Math.floor(initial * 0.08));
@@ -159,6 +191,7 @@ export function syncPetLiveClock(data, root) {
   const mood = data.mood;
   if (!petTimer || mood.mood === "dead" || typeof petTimer.seconds_remaining !== "number") {
     petLiveClock = null;
+    root.removeAttribute("data-pet-local-dead");
     const pet = root.querySelector("[data-pet]");
     if (pet) {
       for (const c of ["pet--life-ok", "pet--life-warn", "pet--life-danger", "pet--life-sad"]) {
@@ -205,6 +238,7 @@ export function startPetLiveTicker(getRoot) {
 
 export function clearPetLiveClock(root) {
   petLiveClock = null;
+  root.removeAttribute("data-pet-local-dead");
   const pet = root.querySelector("[data-pet]");
   if (pet) {
     for (const c of ["pet--life-ok", "pet--life-warn", "pet--life-danger", "pet--life-sad"]) {
