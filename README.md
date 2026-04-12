@@ -1,88 +1,39 @@
-# Tamagotchi GitHub — Hackathon de productividad
+# Tamagotchi GitHub (hackathon)
 
-Mascota tipo **Tamagotchi** cuyo humor refleja **actividad agregada en GitHub** (definida por el backend). El **frontend solo habla con una API HTTP** (`fetch`); el equipo puede cambiar la lógica del servidor sin tocar el JS, respetando el contrato JSON.
+Mascota según actividad en GitHub. **Ventana flotante:** `tamagotchi-float/` + API en `backend/`.
 
----
+## Encender el programa
 
-## Arranque en un solo comando
+1. **Python 3.10+**, venv en la raíz del repo:
+   ```bash
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements-desktop.txt
+   ```
+2. **`.env`** en la raíz (mismas claves para todo el equipo; copiad de `.env.example` si hace falta). Sin `GITHUB_CLIENT_ID` + `SECRET_KEY` (u OAuth/token según el README largo de antes) no hay datos de usuario.
+3. **Un solo comando (recomendado):**
+   ```bash
+   python launch_desktop.py
+   ```
+   Arranca el API en `http://127.0.0.1:8000` y abre la ventana flotante.
 
-Con el venv activo y dependencias instaladas, **desde la raíz del repo**:
+**Alternativa:** `python main.py` (solo API + navegador) o dos terminales: `SKIP_OPEN_BROWSER=1 python main.py` y `cd tamagotchi-float && python run.py`.
 
-```bash
-python main.py
-```
+**Linux (WebKit):** si falla la ventana, ver `tamagotchi-float/README.md` (GTK + venv `--system-site-packages`).
 
-Se abre el navegador en `http://127.0.0.1:8000/` con la UI y las peticiones van a `GET /api/status` en el mismo origen.
+## Documentación útil
 
-Documentación del contrato y cómo montar el backend: **[docs/BACKEND.md](docs/BACKEND.md)**.
+| Qué | Dónde |
+|-----|--------|
+| **Contrato API, de dónde salen commits/contribuciones, JSON, funciones Python (`GithubFetcher`, filtrado)** | [`docs/BACKEND.md`](docs/BACKEND.md) (§3.3) |
+| Variables de entorno (plantilla sin secretos) | `.env.example` |
+| API interactiva | Con el servidor en marcha: `http://127.0.0.1:8000/docs` |
+| UI sin backend | `http://127.0.0.1:8000/?mock=1` |
 
----
+## `.env` y repo público
 
-## Requisitos previos
+- El equipo puede compartir un **`.env` común** por el canal que acordéis (no hace falta que esté en git).
+- **Antes de publicar el repo** sin filtrar secretos: no subir `.env` al historial; rotar `SECRET_KEY` y credenciales OAuth/token si alguna vez se coló en un commit.
 
-| Qué | Para qué |
-|-----|----------|
-| **Python 3.10+** (recomendado 3.11+) | Backend y `venv` |
-| **Navegador moderno** | Interfaz Tamagotchi |
+## Estructura rápida
 
-Node.js **no** es necesario para el front en desarrollo (se sirve con FastAPI).
-
----
-
-## Entorno virtual e instalación
-
-Desde la raíz del proyecto (`hackathon/`):
-
-**Linux / macOS**
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r backend/requirements.txt
-```
-
-**Windows**
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install --upgrade pip
-pip install -r backend/requirements.txt
-```
-
----
-
-## Dependencias Python (`backend/requirements.txt`)
-
-| Paquete | Uso |
-|---------|-----|
-| **fastapi** | API REST |
-| **uvicorn** | Servidor ASGI |
-| **pydantic-settings** | Variables de entorno (opcional; GitHub token, etc.) |
-
----
-
-## Frontend y API
-
-- **`frontend/js/config.js`**: `baseUrl` vacío = mismo origen que la página (recomendado con `python main.py`). Si el API está en otro host, pon aquí su URL.
-- **Mock sin backend**: abre la app con **`?mock=1`** en la URL (datos ficticios en `frontend/js/api.js`).
-
----
-
-## Estructura del repo
-
-| Ruta | Contenido |
-|------|-----------|
-| `main.py` | Entrada: API + estáticos + abrir navegador |
-| `backend/main.py` | FastAPI: rutas `/api/*` y montaje de `frontend/` |
-| `frontend/` | HTML, CSS, JS |
-| `docs/BACKEND.md` | Contrato HTTP/JSON para quien implementa el backend |
-| `.env.example` | Plantilla de variables (token GitHub, etc.) |
-
----
-
-## Más ayuda
-
-- Contrato detallado, CORS y GitHub: [docs/BACKEND.md](docs/BACKEND.md).
-- API interactiva con el servidor en marcha: `http://127.0.0.1:8000/docs`.
+`backend/` → FastAPI + GitHub · `frontend/` → UI estática · `launch_desktop.py` → API + ventana · `frontend/shared/status.js` → normalización del JSON de `/api/status`.

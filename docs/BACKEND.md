@@ -1,144 +1,172 @@
-# Guía del backend para el equipo
+# Backend — API, datos de GitHub y tareas pendientes
 
-Este documento describe **qué debe implementar el backend** para que el frontend (Tamagotchi GitHub) funcione sin cambios de lógica: solo HTTP + JSON con un contrato fijo.
-
-El front **siempre habla con el servidor por HTTP** (`fetch`). En desarrollo, un solo comando levanta API y archivos estáticos juntos (mismo origen, sin CORS).
+Todo el front habla con el servidor por HTTP (mismo origen si usáis `python main.py` o `launch_desktop.py`).
 
 ---
 
-## Cómo lo ejecuta todo el mundo (recomendado)
+## 1. Los 3 endpoints “núcleo” (lo que usa la lógica del producto)
 
-Desde la **raíz del repositorio**, con el entorno virtual activado y dependencias instaladas:
+Estos son los que debéis asumir como **contrato estable** para humor, reglas del juego, otra UI, etc.:
 
-```bash
-python main.py
-```
+| Método | Ruta | Para qué |
+|--------|------|----------|
+| `GET` | **`/api/health`** | Comprobar que el proceso correcto está vivo (`ok`, `app: tamagotchi-github`). |
+| `GET` | **`/api/auth/status`** | Saber si hay sesión GitHub, modo device vs web OAuth, si hace falta login. Cookies: `credentials: "include"`. |
+| `GET` | **`/api/status`** | **Datos de actividad + humor** en un solo JSON (ver §3). Cookies si usáis OAuth. |
 
-Se abre el navegador en `http://127.0.0.1:8000/` con la UI. Las peticiones del JS van a **`GET /api/status`** en el mismo host y puerto.
+**Errores habituales**
 
-Variables de entorno opcionales:
+- `401` en `/api/status` con `{"detail":"github_login_required"}` si OAuth web está activo y no hay cookie de sesión.
 
-| Variable        | Valor por defecto | Uso                          |
-|----------------|-------------------|------------------------------|
-| `HOST`         | `127.0.0.1`       | Interfaz de escucha          |
-| `PORT`         | `8000`            | Puerto                       |
-| `UVICORN_RELOAD` | (vacío)         | `1` o `true` para hot-reload |
-
-Alternativa equivalente:
-
-```bash
-python -m backend.main
-```
-
-Documentación interactiva de FastAPI: `http://127.0.0.1:8000/docs`.
+**Opcional en el JSON de `/api/status`:** `auth_hint: "needs_github_connect"` (HTTP 200) si el servidor no tiene token ni OAuth usable.
 
 ---
 
-## Contrato HTTP que debe cumplir el backend
+## 2. Endpoints auxiliares (login; no los necesitáis si solo consumís datos ya logueados)
 
-### `GET /api/health` (opcional pero recomendada)
+| Ruta | Uso |
+|------|-----|
+| `POST /api/auth/device/start`, `GET /api/auth/device/status` | Device flow OAuth. |
+| `GET /auth/github`, `GET /auth/github/callback`, `GET /auth/logout` | OAuth web con callback. |
 
-Respuesta JSON mínima para comprobar que el servicio vive:
+Detalle de flujos: `backend/main.py`, `backend/github_oauth.py`.
 
-```json
-{ "ok": true }
-```
+---
 
-### `GET /api/status` (obligatoria para el Tamagotchi)
-
-**Content-Type:** `application/json`
-
-**Cuerpo:** un objeto con dos claves de nivel superior: `activity` y `mood`.
+## 3. `GET /api/status` — estructura del JSON
 
 ```json
 {
   "activity": {
-    "contributions_last_24h": 4,
-    "contributions_last_7d": 23,
-    "interactions_last_7d": 12
+    "contributions_last_24h": 0,
+    "contributions_last_7d": 0,
+    "interactions_last_7d": 0,
+    "commits_today_utc": 0,
+    "commits_this_week_utc": 0,
+    "commits_in_events_feed": 0
   },
   "mood": {
     "mood": "happy",
-    "message": "Texto corto para el usuario."
+    "message": "Texto para el usuario."
   }
 }
 ```
 
-#### `activity` (números enteros ≥ 0)
+### 3.1 De dónde salen los números (importante para vuestra lógica)
 
-| Campo                      | Significado (acordado con el equipo) |
-|----------------------------|--------------------------------------|
-| `contributions_last_24h`   | Actividad tipo “contribuciones” en GitHub en ~24 h |
-| `contributions_last_7d`    | Igual, ventana 7 días                |
-| `interactions_last_7d`     | Interacciones agregadas (PRs, issues, comentarios, etc.) |
+Hay **dos fuentes** en el backend (`backend/github_fetcher.py`):
 
-La definición exacta de cada métrica la decidís vosotros (llamadas a la API de GitHub, caché, reglas de negocio). El front solo muestra los números y el mensaje de humor.
+1. **REST `GET /users/{login}/events` (y variante pública sin token)**  
+   - Cuenta **`PushEvent`**: commits vía `size` / `distinct_size` del payload.  
+   - Cuenta **interacciones** (`interactions_last_7d`): tipos como `IssuesEvent`, `PullRequestEvent`, comentarios, etc., en ventana ~7 días.  
+   - **`commits_in_events_feed`**: suma commits de todos los `PushEvent` en las páginas leídas del feed.  
+   - **Problema:** ese timeline a menudo trae **pocos eventos** o solo cosas como `MemberEvent` → sin pushes visibles, aquí sale **0** aunque en el perfil sí tengas actividad.
 
-#### `mood`
+2. **GraphQL `viewer.contributionsCollection.contributionCalendar`** (solo si hay **token**: OAuth o `GITHUB_TOKEN`)  
+   - Misma idea que el **gráfico verde del perfil** de GitHub (contribuciones diarias: commits en rama por defecto, PRs, issues que GitHub agrega al gráfico, etc.).  
+   - El backend hace **`max(eventos, calendario)`** para rellenar sobre todo:  
+     `contributions_last_24h`, `contributions_last_7d`, `commits_today_utc`, `commits_this_week_utc`  
+     cuando el calendario aporta más que el feed REST.
 
-| Campo     | Tipo   | Valores permitidos              |
-|-----------|--------|----------------------------------|
-| `mood`    | string | `happy`, `neutral`, `angry`     |
-| `message` | string | Cualquier texto (frase al usuario) |
+**Resumen para diseñar reglas**
 
-Si enviáis otro valor en `mood`, el frontend lo tratará como `neutral`. Si preferis podemos poner que el front decida el valor y la api solo mande datos.
+- **“¿Cuánto ha trabajado esta semana?”** → usad sobre todo **`contributions_last_7d`** (y/o `commits_this_week_utc`).  
+- **“¿Actividad reciente?”** → **`contributions_last_24h`** + **`commits_today_utc`**.  
+- **“¿Interacción social en GitHub?”** → **`interactions_last_7d`** (solo desde eventos REST; si no hay eventos, puede ser 0).  
+- **“¿Cuántos commits en el feed crudo?”** (depuración / alcance API) → **`commits_in_events_feed`**.
 
----
+### 3.2 `mood`
 
-## Alias de campos (compatibilidad)
+| Campo | Valores |
+|-------|---------|
+| `mood` | `happy` \| `neutral` \| `angry` |
+| `message` | string libre |
 
-Si el backend ya devuelve otros nombres, el frontend puede mapearlos **sin tocar el resto de la app**: editad `normalizeStatusPayload` en `frontend/js/api.js`. Hoy acepta, entre otros:
+La regla actual del servidor está en `backend/main.py` → `_mood_from_activity` (podéis cambiarla o ignorar `mood` y calcular el vuestro solo con `activity`).
 
-- En lugar de `contributions_last_24h`: `github_contributions_last_24h`, `commits_last_24h`
-- En lugar de `contributions_last_7d`: `github_contributions_last_7d`, `commits_last_7d`
-- En lugar de `interactions_last_7d`: `github_interactions_last_7d`, `public_events_last_7d`, `push_events_last_7d`
+### 3.3 Python: qué función saca los commits y cómo podéis filtrarlos
 
-Idealmente el backend nuevo usa ya los nombres canónicos de la tabla anterior.
+Todo vive en **`backend/github_fetcher.py`** (clase **`GithubFetcher`**). La ruta HTTP solo delega:
 
----
+| Paso | Archivo / función | Qué hace |
+|------|-------------------|----------|
+| 1 | `backend/main.py` → **`api_status()`** | Crea `GithubFetcher(token=sesión)` o `GithubFetcher()` (`.env`) y llama **`activity_metrics(max_event_pages=15)`**. El humor sale de **`_mood_from_activity(activity)`** con ese dict. |
+| 2 | **`GithubFetcher.activity_metrics()`** | Es el **agregador** que devuelve el JSON `activity`. Recorre eventos con **`iter_events`**, suma números por fechas, luego mezcla con **`_graphql_contribution_totals(now)`** (`max` por campo si el calendario aporta más). |
+| 3 | **`resolve_login()`** | Con token: `GET /user` y guarda `login`. Sin token pero con `GITHUB_LOGIN` en env: usa ese login. |
+| 4 | **`_events_path(login)`** | Con token → `GET /users/{login}/events`. Sin token → `.../events/public`. |
+| 5 | **`iter_events(max_pages, per_page)`** | Pagina la API de eventos (`page` 1…`max_pages`) y hace **yield** de cada evento (dict JSON de GitHub). |
+| 6 | **`_push_commit_count(payload)`** | Dado el `payload` de un **`PushEvent`**, obtiene el número de commits: primero **`distinct_size`** o **`size`**, si no hay, **`len(payload["commits"])`** (GitHub puede truncar la lista a 20; por eso prioriza `size`). |
+| 7 | **`_graphql_contribution_totals(now)`** | `POST /graphql` con la query del calendario; devuelve totales por día y calcula hoy / 7 días calendario / semana ISO. |
+| 8 | **`_INTERACTION_TYPES`** | `frozenset` al inicio del módulo: tipos de evento que cuentan para **`interactions_last_7d`** (no incluye `PushEvent` ni `MemberEvent`). |
 
-## Dónde está el código de ejemplo
+**Commits uno a uno (para filtrar por repo, mensaje, autor, etc.)**
 
-En `backend/main.py`:
+- **`iter_commits_from_push_events(max_pages)`** recorre solo **`PushEvent`**, abre `payload["commits"]` y emite objetos **`CommitInfo`** (`sha`, `message` primera línea, `repository_full_name`, `pushed_at`, `author_name`).
+- Hoy **`activity_metrics`** no usa esta iteración para las cifras agregadas (usa `_push_commit_count` por push); si queréis reglas finas, podéis **importar y llamar** a `iter_commits_from_push_events` desde otro módulo o **extender** `activity_metrics`.
 
-- `api_health` y `api_status` son **plantilla**: sustituid la lógica de `api_status` por GitHub, base de datos, etc.
-- Se monta la carpeta `frontend/` en `/` para servir HTML, CSS y JS.
+**Ejemplos de extensión / filtrado**
 
-No rompáis la ruta `/api/status` sin avisar al equipo de front, o actualizad `frontend/js/config.js` (`endpoints.status`).
+1. **Solo ciertos repos** — Dentro del `for ev in self.iter_events(...)` de `activity_metrics`, tras comprobar `PushEvent`, leed `ev.get("repo", {}).get("name")` y haced `continue` si no cumple el prefijo (p. ej. solo `mi-org/`).
+2. **Cambiar qué cuenta como “interacción”** — Editad **`_INTERACTION_TYPES`** (añadir o quitar strings de `type` de la API de GitHub).
+3. **Métrica nueva basada en commits reales** — Iterad `iter_commits_from_push_events`, filtrad por `CommitInfo.repository_full_name` o `message`, y sumad; podéis añadir claves al `dict` que devuelve `activity_metrics` (y actualizar `frontend/shared/status.js` + UI si hace falta exponerlo).
+4. **Ignorar GraphQL** — Comentad o condicionad la llamada a **`_graphql_contribution_totals`** en `activity_metrics` si solo queréis números del feed REST.
 
----
+**Dataclass de referencia**
 
-## GitHub API (orientación)
-
-- El **token** y las llamadas a GitHub deben vivir en el **servidor** (variables de entorno, nunca en el repo ni en el JS del navegador).
-- Cabecera típica: `Authorization: Bearer <token>` o `token` según el tipo de token.
-- Límites de rate: conviene caché en memoria o en disco para demos.
-
-Podéis añadir en `.env` (y en `.env.example` sin secretos) variables como `GITHUB_TOKEN`, `GITHUB_LOGIN`, etc., y leerlas con `pydantic-settings` (ya está en `requirements.txt`).
-
----
-
-## Si el front y el API van en orígenes distintos
-
-Ejemplo: front en `http://localhost:5500` y API en `http://127.0.0.1:8000`.
-
-1. Configurar **CORS** en FastAPI para permitir el origen del front (en `backend/main.py` ya hay `allow_origins=["*"]` para desarrollo; en producción restringid orígenes).
-2. En `frontend/js/config.js`, poned `baseUrl: "http://127.0.0.1:8000"` (u origen real del API).
-
-En el flujo **un solo comando** (`python main.py`) esto no hace falta: `baseUrl` vacío y mismas rutas relativas.
-
----
-
-## Modo mock del frontend (solo UI)
-
-Si alguien trabaja solo en diseño sin levantar Python, puede abrir la app con **`?mock=1`** en la URL. El JS no llama al API y usa datos ficticios definidos en `frontend/js/api.js`.
+```text
+CommitInfo(sha, message, repository_full_name, pushed_at, author_name?)
+```
 
 ---
 
-## Resumen para quien implementa el backend
+## 4. Cómo usar esto en vuestro código (ejemplos mínimos)
 
-1. Mantener **`GET /api/status`** con JSON `activity` + `mood` como arriba (o alias soportados en `normalizeStatusPayload`).
-2. Implementar la lógica real dentro de `api_status` (o en módulos importados desde ahí).
-3. Probar con `python main.py` y comprobar en red del navegador que `GET /api/status` devuelve 200 y el JSON esperado.
+**JavaScript (misma web / otro front con CORS resuelto)**
 
-Si cambiáis el contrato, actualizad este archivo y avisad al equipo de front.
+```js
+const r = await fetch("/api/status", { credentials: "include" });
+const data = await r.json();
+const { activity, mood } = data;
+if (activity.contributions_last_7d > 10) {
+  /* vuestra lógica */
+}
+```
+
+**Python (otro servicio)**
+
+```python
+import urllib.request
+req = urllib.request.Request("http://127.0.0.1:8000/api/status")
+with urllib.request.urlopen(req) as r:
+    data = json.load(r)
+```
+
+Si dependéis de **sesión OAuth**, el cliente debe guardar/enviar la **cookie** de sesión (`credentials: "include"` en el navegador).
+
+**Normalización de nombres** (por si el backend devuelve alias): `frontend/shared/status.js` → `normalizeStatusPayload`.
+
+---
+
+## 5. Tareas / mejoras que quedan (backend)
+
+Prioridad libre; lista orientativa:
+
+- [ ] **Caché** de respuestas GitHub (menos riesgo de rate limit; TTL configurable).  
+- [ ] **Tests** (pytest) de `activity_metrics` / parsing GraphQL con fixtures JSON.  
+- [ ] Afinar semántica de **`contributions_last_24h`** (hoy es mezcla “rolling desde eventos” + “hoy UTC” del calendario).  
+- [ ] **Reglas de humor** configurables (env o JSON) en lugar de solo `_mood_from_activity`.  
+- [ ] **CORS** restrictivo si el front vive en otro origen (ahora `*` en desarrollo).  
+- [ ] Documentar / exponer **rate limits** restantes en cabeceras o log.  
+- [ ] Opcional: endpoint extra solo lectura (`GET /api/activity/raw`) para depuración sin tocar el contrato del Tamagotchi.
+
+---
+
+## 6. Variables de entorno (recordatorio)
+
+Plantilla: **`.env.example`**. Relevantes: `GITHUB_CLIENT_ID`, `SECRET_KEY`, OAuth web opcional, `GITHUB_TOKEN` / `GITHUB_LOGIN`, `GITHUB_OAUTH_SCOPES`, `TAMAGOTCHI_GITHUB_LOG`, `HOST`, `PORT`.
+
+---
+
+## 7. Modo mock (solo UI)
+
+URL con **`?mock=1`**: el JS no llama al API real; datos ficticios en `frontend/js/api.js`.

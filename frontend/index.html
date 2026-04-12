@@ -4,9 +4,57 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tamagotchi GitHub</title>
-    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/style.css?v=8" />
   </head>
   <body>
+    <div class="auth-gate" data-auth-gate hidden>
+      <div class="auth-gate__panel">
+        <h2 class="auth-gate__title">Conecta GitHub</h2>
+        <p class="auth-gate__text" data-auth-gate-text>
+          Para ver tu Tamagotchi necesitamos que inicies sesión con GitHub. Solo pedimos el alcance
+          <strong>read:user</strong> (perfil público).
+        </p>
+        <p class="auth-gate__error" data-auth-gate-error aria-live="polite"></p>
+        <p class="auth-gate__remember" data-session-last-login hidden></p>
+        <p class="auth-gate__device-hint" data-device-hint hidden></p>
+        <div class="device-flow-panel" data-device-flow-panel hidden>
+          <p class="device-flow-panel__intro">
+            En ventanas tipo esta a veces no se abre el navegador solo. Usa el botón de abajo o copia el código.
+          </p>
+          <label class="device-flow-panel__label" for="device-user-code-gate">Código para GitHub</label>
+          <div class="device-flow-panel__row">
+            <input
+              id="device-user-code-gate"
+              type="text"
+              readonly
+              class="device-flow-panel__code"
+              data-device-user-code
+              value=""
+              autocomplete="off"
+            />
+            <button type="button" class="btn btn--secondary device-flow-panel__copy" data-copy-user-code>
+              Copiar
+            </button>
+          </div>
+          <a
+            class="btn auth-gate__btn device-flow-panel__open"
+            data-device-open-github
+            href="#"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Abrir GitHub (navegador)</a
+          >
+          <p class="device-flow-panel__wait">Esperando que autorices…</p>
+        </div>
+        <div class="auth-gate__connect-row" data-auth-connect-row>
+          <a class="btn auth-gate__btn" data-auth-github-link href="/auth/github">Conectar con GitHub</a>
+          <button type="button" class="btn auth-gate__btn" data-auth-device-start hidden>
+            Conectar con GitHub
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="app" data-app>
       <header class="app__header">
         <h1 class="app__title">Tamagotchi GitHub</h1>
@@ -14,21 +62,82 @@
           Humor según tu <strong>actividad general en GitHub</strong> (toda tu cuenta), no un solo
           repositorio local
         </p>
+        <p class="app__logout" data-session-logout hidden>
+          <a href="/auth/logout" class="app__logout-link" data-auth-logout-link>Cerrar sesión</a>
+        </p>
       </header>
 
       <div class="device">
         <div class="device__screen">
           <span class="mood-badge" data-mood-badge aria-hidden="true">—</span>
-          <div class="pet" data-pet role="img" aria-label="Mascota">🥚</div>
+          <div class="pet" data-pet role="img" aria-label="Mascota">
+            <img
+              class="pet__img"
+              data-pet-img
+              src="images/pet-egg.svg"
+              alt=""
+              width="96"
+              height="96"
+              decoding="async"
+            />
+          </div>
           <p class="mood-text" data-mood-text aria-live="polite">Cargando…</p>
+          <div class="connect-banner" data-connect-banner hidden>
+            <p class="connect-banner__hint" data-device-hint hidden></p>
+            <div class="device-flow-panel device-flow-panel--banner" data-device-flow-panel hidden>
+              <p class="device-flow-panel__intro device-flow-panel__intro--small">
+                Pulsa para abrir GitHub o copia el código.
+              </p>
+              <div class="device-flow-panel__row">
+                <input
+                  type="text"
+                  readonly
+                  class="device-flow-panel__code"
+                  data-device-user-code
+                  value=""
+                  autocomplete="off"
+                />
+                <button type="button" class="btn btn--secondary device-flow-panel__copy" data-copy-user-code>
+                  Copiar
+                </button>
+              </div>
+              <a
+                class="btn connect-banner__btn"
+                data-device-open-github
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Abrir GitHub</a
+              >
+              <p class="device-flow-panel__wait device-flow-panel__wait--small">Esperando autorización…</p>
+            </div>
+            <div class="connect-banner__actions" data-auth-connect-row-banner>
+              <a class="btn connect-banner__btn" data-connect-github-inline href="/auth/github"
+                >Conectar con GitHub</a
+              >
+              <button type="button" class="btn connect-banner__btn" data-auth-device-inline hidden>
+                Conectar con GitHub
+              </button>
+            </div>
+          </div>
           <dl class="stats">
-            <dt>Contribuciones GitHub (~24 h)</dt>
+            <dt>Commits hoy (UTC, fecha del push)</dt>
+            <dd data-stat-github-today>—</dd>
+            <dt>Commits esta semana (lun–dom UTC)</dt>
+            <dd data-stat-github-week>—</dd>
+            <dt>Contribuciones GitHub (~24 h, rolling)</dt>
             <dd data-stat-github-24>—</dd>
-            <dt>Contribuciones GitHub (7 d)</dt>
+            <dt>Contribuciones GitHub (7 d, rolling)</dt>
             <dd data-stat-github-7>—</dd>
             <dt>Interacciones GitHub (7 d)</dt>
             <dd data-stat-github-interactions-7>—</dd>
+            <dt>Commits en feed de eventos (suma en páginas leídas)</dt>
+            <dd data-stat-github-feed>—</dd>
           </dl>
+          <p class="stats__hint">
+            Los números salen de la API de eventos de GitHub (PushEvent). «Feed» = todo lo recogido al paginar
+            <code>/users/…/events</code>; no es el histórico completo de la cuenta.
+          </p>
         </div>
         <div class="device__actions">
           <button type="button" class="btn" data-action-refresh>Actualizar</button>
@@ -39,7 +148,7 @@
         Modo <strong>mock</strong> (<code>?mock=1</code>): datos ficticios sin llamar al API. En
         uso normal, ejecutad <code>python main.py</code> y abrid la app sin ese parámetro. Contrato
         del backend: <code>docs/BACKEND.md</code>. Mapeo de campos JSON:
-        <code>js/api.js</code> → <code>normalizeStatusPayload</code>.
+        <code>shared/status.js</code> → <code>normalizeStatusPayload</code>.
       </p>
     </div>
 
@@ -48,6 +157,6 @@
       const hint = document.querySelector("[data-mock-hint]");
       if (hint && isMockMode()) hint.hidden = false;
     </script>
-    <script src="js/app.js" type="module"></script>
+    <script src="js/app.js?v=11" type="module"></script>
   </body>
 </html>

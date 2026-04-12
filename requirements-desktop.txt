@@ -1,0 +1,5 @@
+# Instalar en el MISMO venv de la raíz del repo (junto al backend):
+#   pip install -r requirements-desktop.txt
+#
+-r backend/requirements.txt
+pywebview>=4.4,<6

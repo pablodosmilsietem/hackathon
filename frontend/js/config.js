@@ -23,3 +23,12 @@ export function isMockMode() {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("mock") === "1";
 }
+
+/**
+ * Ventana flotante (pywebview): `?float=1` en la URL → poll cada 5 s y sin botón manual.
+ * @returns {boolean}
+ */
+export function isFloatMode() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("float") === "1";
+}

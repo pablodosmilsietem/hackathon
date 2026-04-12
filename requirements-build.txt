@@ -1,0 +1,3 @@
+# Solo en la máquina donde generas el binario:
+#   pip install -r requirements-build.txt
+pyinstaller>=6.0

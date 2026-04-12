@@ -1,0 +1,17 @@
+cd /home/pablomontes/Documentos/uni/hackathon/tamagotchi-float
+deactivate 2>/dev/null || true
+rm -rf .venv
+python3 -m venv .venv --system-site-packages
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r ../backend/requirements.txt
+pip install 'pywebview>=4.4,<6'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tamagotchi GitHub
+Comment=Backend + ventana flotante
+Exec=REPO_ROOT/launch-tamagotchi.sh
+Path=REPO_ROOT
+Terminal=false
+Categories=Utility;Development;

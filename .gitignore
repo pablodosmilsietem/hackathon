@@ -3,12 +3,16 @@ __pycache__/
 .venv/
 venv/
 *.pyc
-.env
 
 # IDE
 .idea/
-.vscode/
+/.vscode/
 *.swp
 
 # OS
 .DS_Store
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
