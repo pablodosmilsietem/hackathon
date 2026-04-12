@@ -1,223 +1,329 @@
 # Guía completa — Tamagotchi GitHub
 
-Documentación detallada del proyecto: qué hace cada pieza, cómo fluyen los datos y cómo se comporta el juego del gato. Pensada para quien graba un vídeo, hace la defensa del hackathon o mantiene el código sin haberlo escrito.
+Esta guía explica el proyecto **desde cero**: qué problema resuelve, qué vería una persona que solo abre el programa, y cómo encajan el código del servidor, la página web y la ventana de escritorio. Está pensada para **defensa de hackathon**, **vídeo demo** o **alguien nuevo en el repo** que no ha tocado FastAPI ni OAuth.
+
+Si ya dominas backend/web, puedes ir directo a la [tabla de contenidos](#tabla-de-contenidos) y saltar la sección “Empieza aquí”.
+
+---
+
+## Empieza aquí si no sabes nada del proyecto
+
+### ¿Qué es esto, en una frase?
+
+Es una **aplicación que mira tu actividad en GitHub** (commits, contribuciones, algo de interacciones) y **muestra un gato** que cambia de estado según esa actividad. Si **inicias sesión con GitHub**, además el gato tiene un **temporizador de vida**: si el tiempo llega a cero, el gato “muere”; **cada commit nuevo que cuente como “de hoy”** (según reglas del programa) puede **alargar** ese tiempo.
+
+No es un juego con niveles ni puntuación global: es un **recordatorio gamificado** de mantener ritmo en el repositorio.
+
+### Analogía rápida: Tamagotchi + GitHub
+
+Un **Tamagotchi** clásico pide que lo alimentes o juegues con él. Aquí, en lugar de pulsar “comida”, la “comida” es **hacer cosas en GitHub** (sobre todo **commits**). El servidor **no mira tu teclado**: solo lo que **GitHub expone por su API** sobre tu cuenta.
+
+### Tres piezas que tienes que tener claras
+
+1. **El servidor (backend)**  
+   Un programa en **Python** que:
+   - Escucha en un **puerto** de tu máquina (por defecto `8000`).
+   - Habla con **api.github.com** usando un **token** (tuyo, tras OAuth, o uno fijo del `.env` en modo demo).
+   - Devuelve **JSON** (datos estructurados) en rutas como `/api/status`.
+   - También **sirve los archivos** de la carpeta `frontend/` (HTML, CSS, JS) para que el navegador muestre la interfaz.
+
+2. **La interfaz (frontend)**  
+   Página web (`index.html` + JavaScript) que:
+   - Pide datos al servidor (por ejemplo “¿cómo está el gato?”).
+   - Dibuja el gato, el texto, la barra de tiempo, los botones.
+   - Puede estar en el **navegador** o dentro de una **ventana de escritorio** que por dentro es casi un mini-navegador (**pywebview**).
+
+3. **GitHub**  
+   La fuente de verdad de “¿qué ha hecho este usuario?”. No guardamos una copia de tus repos en disco: **cada vez** (o cada X segundos) el servidor **vuelve a preguntar** a GitHub.
+
+### ¿Qué significa “conectar con GitHub”?
+
+GitHub no deja que cualquier página web lea tu actividad privada sin permiso. Por eso usamos **OAuth**: tú autorizas a **nuestra aplicación** (registrada en GitHub como “OAuth App”) y GitHub nos da un **token de acceso** temporal. Ese token se guarda en una **sesión del servidor** (normalmente en una **cookie** cifrada/firmada en tu navegador). Con ese token, nuestro backend puede llamar a la API en tu nombre.
+
+**Sin conectar:** si el proyecto está configurado con `GITHUB_TOKEN` y `GITHUB_LOGIN` en `.env`, el servidor puede mostrar datos de **un único usuario fijo** (útil para demos sin que cada persona configure OAuth).
+
+### Mini glosario (términos que salen en el código y en esta guía)
+
+| Término | Significado sencillo |
+|--------|------------------------|
+| **API** | Interfaz por la que un programa pide datos a otro por red. Aquí, la **REST API** y algo de **GraphQL** de GitHub. |
+| **JSON** | Formato de texto para enviar datos (objetos con campos como `"mood": "happy"`). |
+| **FastAPI** | Framework en Python para definir rutas HTTP (`GET /api/status`) y validar respuestas. |
+| **Uvicorn** | Servidor que **ejecuta** la app FastAPI y atiende peticiones HTTP. |
+| **Cookie de sesión** | Pequeño dato que el navegador guarda y reenvía al servidor; aquí lleva un ID de sesión o datos firmados para saber “quién eres” tras el login. |
+| **OAuth** | Protocolo para “iniciar sesión con GitHub” sin que escribas tu contraseña en nuestra página (vas a GitHub y vuelves). |
+| **Device flow** | Variante de OAuth para dispositivos: GitHub te da un **código** que introduces en el navegador; la app hace **polling** hasta que apruebas. |
+| **Polling** | Volver a preguntar al servidor cada pocos segundos (“¿ya está listo?” / “¿hay datos nuevos?”). |
+| **UTC** | Hora universal. “Commits hoy” en el juego usa el **día en UTC**, no la medianoche de tu zona horaria (importante si explicas el hackathon en España y el servidor cuenta otro día). |
+| **CORS** | Reglas del navegador sobre si una página en un dominio puede llamar a un API en otro. Aquí, al servir front y API en el **mismo origen** (`127.0.0.1:8000`), casi no te afecta en desarrollo. |
+| **PyInstaller** | Herramienta que empaqueta Python + dependencias en un **ejecutable** para Windows/Linux. |
 
 ---
 
 ## Tabla de contenidos
 
 1. [Visión general](#1-visión-general)
-2. [Estructura de carpetas](#2-estructura-de-carpetas)
-3. [Tres formas de ejecutar la aplicación](#3-tres-formas-de-ejecutar-la-aplicación)
-4. [Variables de entorno (`.env`)](#4-variables-de-entorno-env)
-5. [Backend: FastAPI y montaje del frontend](#5-backend-fastapi-y-montaje-del-frontend)
-6. [Autenticación con GitHub (OAuth)](#6-autenticación-con-github-oauth)
-7. [Cómo se obtienen los datos de GitHub](#7-cómo-se-obtienen-los-datos-de-github)
-8. [API HTTP: lista de rutas y contratos](#8-api-http-lista-de-rutas-y-contratos)
-9. [El juego del gato (solo sesión OAuth)](#9-el-juego-del-gato-solo-sesión-oauth)
-10. [Humor (`mood`): reglas en el servidor](#10-humor-mood-reglas-en-el-servidor)
-11. [Frontend: archivos y flujo](#11-frontend-archivos-y-flujo)
-12. [Ventana flotante (pywebview)](#12-ventana-flotante-pywebview)
-13. [Empaquetado con PyInstaller](#13-empaquetado-con-pyinstaller)
-14. [Buenas prácticas con Git](#14-buenas-prácticas-con-git)
+2. [Historia de un uso: qué pasa al abrir la app](#2-historia-de-un-uso-qué-pasa-al-abrir-la-app)
+3. [Estructura de carpetas](#3-estructura-de-carpetas)
+4. [Tres formas de ejecutar la aplicación](#4-tres-formas-de-ejecutar-la-aplicación)
+5. [Variables de entorno (`.env`)](#5-variables-de-entorno-env)
+6. [Backend: FastAPI y montaje del frontend](#6-backend-fastapi-y-montaje-del-frontend)
+7. [Autenticación con GitHub (OAuth)](#7-autenticación-con-github-oauth)
+8. [Cómo se obtienen los datos de GitHub](#8-cómo-se-obtienen-los-datos-de-github)
+9. [API HTTP: rutas y qué devuelven](#9-api-http-rutas-y-qué-devuelven)
+10. [El juego del gato (solo con sesión OAuth)](#10-el-juego-del-gato-solo-con-sesión-oauth)
+11. [Humor del gato (`mood`): reglas exactas del código](#11-humor-del-gato-mood-reglas-exactas-del-código)
+12. [Frontend: archivos y flujo detallado](#12-frontend-archivos-y-flujo-detallado)
+13. [Ventana flotante (pywebview)](#13-ventana-flotante-pywebview)
+14. [Empaquetado con PyInstaller](#14-empaquetado-con-pyinstaller)
+15. [Buenas prácticas con Git](#15-buenas-prácticas-con-git)
+16. [Referencias](#16-referencias)
 
 ---
 
 ## 1. Visión general
 
-**Tamagotchi GitHub** es una aplicación que:
+**Tamagotchi GitHub** hace cuatro cosas encadenadas:
 
-1. **Consulta la API de GitHub** para estimar actividad (commits, contribuciones, interacciones).
-2. **Muestra una mascota** con estados visuales (`happy`, `neutral`, `angry`, `dead`) y un mensaje.
-3. **Con sesión OAuth**, añade un **reloj de vida**: el gato “muere” si se agota el tiempo; **cada commit nuevo contado en el día UTC actual** puede **sumar segundos** (configurable).
-4. Sirve la **interfaz web** desde el **mismo proceso** que la API (mismo origen → sin CORS en uso normal).
+1. **Obtiene métricas de actividad** desde GitHub (commits en ventanas de tiempo, contribuciones tipo calendario del perfil, interacciones en issues/PRs, etc.). La lógica está en `backend/github_fetcher.py`.
 
-No hay base de datos: el estado del “gato” vive en la **sesión del servidor** (cookie firmada) y en **memoria** por proceso.
+2. **Decide el “humor” del gato** (`happy`, `neutral`, `angry`, `dead`) y un **mensaje** legible. Eso está en `backend/main.py` en `_mood_from_activity`.
 
----
+3. **Si el usuario ha hecho OAuth** (sesión con token en cookie), activa un **reloj de vida**:
+   - Al empezar (o al pulsar “Nuevo gato”) el gato tiene **X segundos** (por defecto 300 = 5 minutos, configurable).
+   - Cuando GitHub reporta **más commits hoy (UTC)** que la última vez que miramos, el servidor **suma** `bonus × número de commits nuevos` al tiempo que queda (por defecto 60 s por commit).
+   - Si el reloj llega a **0**, el estado pasa a **muerto** hasta que resetees o vuelvas a ganar tiempo con commits antes de que muera de nuevo (el mensaje lo explica en la UI).
 
-## 2. Estructura de carpetas
+4. **Sirve la interfaz web** desde el **mismo servidor** que el API. Así la URL es algo como `http://127.0.0.1:8000/` y las peticiones a `/api/...` van al mismo sitio: no hace falta configurar CORS para un origen distinto en el caso típico.
 
-| Ruta | Contenido |
-|------|-----------|
-| `backend/main.py` | Aplicación FastAPI: rutas `/api/*`, `/auth/*`, montaje de `frontend/`. |
-| `backend/github_fetcher.py` | Cliente HTTP a GitHub: eventos + GraphQL del calendario de contribuciones. |
-| `backend/github_oauth.py` | URLs y intercambio de códigos/tokens OAuth (web y device flow). |
-| `frontend/` | HTML, CSS, JS modular (`js/app.js`, `js/ui.js`, `js/api.js`, `shared/status.js`). |
-| `frontend/shared/status.js` | Normalización del JSON de `/api/status` (contrato único para web u otras UIs). |
-| `tamagotchi-float/run.py` | Ventana de escritorio con **pywebview** apuntando a `http://127.0.0.1:8000/?float=1`. |
-| `launch_desktop.py` | Arranca **uvicorn** + **ventana flotante** en un solo comando; compatible con PyInstaller. |
-| `main.py` (raíz) | Punto de entrada para **solo** servidor + opcional abrir navegador (importa `backend.main`). |
-| `tamagotchi.spec` | Definición **PyInstaller** (qué empaquetar). |
-| `packaging/build-binary.sh` | Script que instala deps de build y ejecuta PyInstaller. |
-| `docs/BACKEND.md` | Contrato API y detalle del fetcher (puede estar parcialmente desactualizado frente a esta guía). |
-| `.env.example` | Plantilla de variables (sin secretos reales). |
+**Importante:** no usamos base de datos. El estado del gato (cuándo expira, cuántos commits “vimos” el último día, overrides de configuración) vive en la **sesión en memoria del proceso** + **cookie** que identifica esa sesión. Si reinicias el servidor sin persistencia externa, las sesiones pueden perderse (depende de cómo esté montado el middleware de sesiones).
 
 ---
 
-## 3. Tres formas de ejecutar la aplicación
+## 2. Historia de un uso: qué pasa al abrir la app
 
-### 3.1 `python main.py` (desde la raíz del repo)
+Imagina que ejecutas `python launch_desktop.py` en la raíz del proyecto.
 
-- Arranca **uvicorn** con `backend.main:app`.
-- Sirve API bajo `/api/*` y archivos estáticos bajo `/` (incluido `index.html`).
-- Puede abrir el navegador (configurable con variables de entorno; ver `backend/main.py`).
+1. **Arranca el servidor** en segundo plano (o en un hilo si es el ejecutable empaquetado). Empieza a escuchar en `127.0.0.1:8000`.
 
-**Uso típico:** desarrollo web o depuración con DevTools del navegador.
+2. **Se abre una ventana pequeña** (pywebview) que carga una URL con `?float=1`. Eso le dice al JavaScript que está en **modo flotante**: refresca datos **cada 5 segundos** en lugar de cada 60.
 
-### 3.2 `python launch_desktop.py`
+3. La página carga `index.html` → `js/app.js`. Lo **primero** que hace el JS es llamar a **`GET /api/auth/status`**.
 
-1. Carga `.env` (ver §4).
-2. Comprueba que el puerto (por defecto **8000**) esté libre.
-3. **Modo desarrollo:** lanza `python -m uvicorn backend.main:app` como **subproceso**.
-4. **Modo ejecutable PyInstaller (`sys.frozen`):** lanza uvicorn en un **hilo daemon** dentro del mismo proceso (no puede re-ejecutar el `.exe` como intérprete).
-5. Espera a que `GET /api/health` responda `ok` y `app: tamagotchi-github`.
-6. Ejecuta `tamagotchi-float/run.py` → ventana pywebview.
+4. **Si OAuth está configurado** y **no** tienes sesión:
+   - Verás la **pantalla de “conectar”** (código de dispositivo o enlace a GitHub, según el flujo).
+   - Hasta que no haya token en sesión, **`GET /api/status`** puede responder **401** con `github_login_required`: el front sabe que debe mostrar la puerta de login, no el gato con datos reales.
 
-**Uso típico:** demo “como producto” en escritorio.
+5. **Cuando ya hay sesión** (o en modo `.env` con token del servidor):
+   - El front llama **`GET /api/status`** de forma periódica.
+   - El servidor contacta con GitHub, calcula actividad, actualiza el **ciclo de vida del gato** si aplica, calcula `mood` y opcionalmente `pet_timer`.
+   - El front **pinta** el sprite, el texto, “commits hoy”, la barra de tiempo.
+   - Además corre un **ticker local cada 1 segundo** para que el número y la barra **bajen suavemente** entre una respuesta del servidor y la siguiente; si localmente llega a 0, la UI puede mostrar **muerte al instante** sin esperar al siguiente fetch.
 
-### 3.3 Solo ventana (backend ya corriendo)
+6. Si pulsas **“Nuevo gato”**, el front hace **`POST /api/reset_pet`**: el servidor reinicia el temporizador y el snapshot de commits para no “regalar” tiempo por commits viejos.
+
+Esa secuencia es la que puedes **narrar en un vídeo** casi literalmente.
+
+---
+
+## 3. Estructura de carpetas
+
+Aquí qué es **cada carpeta/archivo importante** y **por qué existe**.
+
+| Ruta | Qué es y para qué sirve |
+|------|-------------------------|
+| `backend/main.py` | **Cerebro HTTP**: define rutas `/api/*`, `/auth/*`, monta sesiones, llama al fetcher, aplica reglas del gato y del humor, sirve estáticos. |
+| `backend/github_fetcher.py` | **Cliente GitHub**: descarga eventos (pushes, etc.), interpreta payloads, opcionalmente GraphQL del calendario de contribuciones, y devuelve un diccionario `activity_metrics`. |
+| `backend/github_oauth.py` | **Detalles OAuth**: URLs de autorización, device flow, intercambio de código por token. |
+| `frontend/` | **Interfaz**: HTML, CSS, JS. No contiene secretos; solo lógica de UI y llamadas al API. |
+| `frontend/js/app.js` | Arranque: auth, polling, ticker del reloj, botones reset/config. |
+| `frontend/js/ui.js` | Cómo se ve el gato, mensajes, barra, estados visuales (incl. muerte local). |
+| `frontend/js/api.js` | Funciones `fetch` a las rutas del backend. |
+| `frontend/js/config.js` | `baseUrl`, detección `?mock=1` y `?float=1`. |
+| `frontend/shared/status.js` | Normaliza el JSON de `/api/status` para que el resto del código no asuma campos siempre presentes. |
+| `tamagotchi-float/run.py` | **Solo la ventana**: abre pywebview apuntando al servidor. |
+| `launch_desktop.py` | **Un solo comando**: sube el API y luego la ventana; adaptado a desarrollo y a ejecutable PyInstaller. |
+| `main.py` (raíz) | Entrada alternativa: **solo servidor** (y opcional abrir navegador), sin pywebview. |
+| `tamagotchi.spec` | Receta de PyInstaller: qué archivos incluir en el binario. |
+| `packaging/build-binary.sh` | Automatiza instalación de herramientas de build y ejecución de PyInstaller. |
+| `docs/BACKEND.md` | Documentación más técnica del contrato del fetcher (complementa esta guía). |
+| `.env.example` | Lista de variables **sin valores secretos** para que el equipo copie y rellene. |
+
+---
+
+## 4. Tres formas de ejecutar la aplicación
+
+### 4.1 `python main.py` (raíz del repo)
+
+- Levanta **Uvicorn** con la aplicación `backend.main:app`.
+- En `http://127.0.0.1:8000/` tienes la **misma web** que en la ventana flotante.
+- Útil para **inspeccionar con DevTools** (F12), ver la consola de red, depurar CSS/JS.
+
+**Cuándo usarlo:** desarrollo web o cuando pywebview te da problemas en Linux y quieres validar solo el API + navegador.
+
+### 4.2 `python launch_desktop.py` (recomendado para demo)
+
+Pasos internos (resumidos pero completos):
+
+1. Busca y carga **`.env`** desde ubicaciones razonables (incluida la carpeta del `.exe` si está empaquetado).
+2. Comprueba que el **puerto** (por defecto 8000) esté libre; si no, avisa y sale.
+3. **Si no estás en un binario PyInstaller:** lanza `python -m uvicorn backend.main:app` como **subproceso** (proceso hijo separado).
+4. **Si estás en PyInstaller (`sys.frozen`):** no puede volver a invocar `python`; en su lugar arranca Uvicorn en un **hilo** dentro del mismo proceso.
+5. Hace **polling** a `GET /api/health` hasta ver respuesta correcta (app `tamagotchi-github`).
+6. Ejecuta `tamagotchi-float/run.py` para abrir la ventana con `?float=1`.
+
+### 4.3 Solo la ventana (API ya en marcha)
+
+En una terminal: `SKIP_OPEN_BROWSER=1 python main.py` (o similar). En otra:
 
 ```bash
 cd tamagotchi-float && python run.py
 ```
 
-El backend debe estar activo en la URL configurada (`TAMAGOTCHI_FLOAT_URL` o por defecto `http://127.0.0.1:8000/?float=1`).
+La URL por defecto apunta a `http://127.0.0.1:8000/?float=1`; puedes cambiarla con **`TAMAGOTCHI_FLOAT_URL`** si el servidor está en otro sitio.
 
 ---
 
-## 4. Variables de entorno (`.env`)
+## 5. Variables de entorno (`.env`)
 
-El archivo **`.env`** no debe subirse al repositorio público con secretos reales.
+El archivo **`.env`** es texto con líneas `NOMBRE=valor`. Sirve para **no meter secretos en el código** ni en git.
 
-**Carga:**
+**Quién lo lee:** sobre todo `launch_desktop.py` al arrancar el escritorio. Si solo ejecutas `uvicorn` a mano sin cargar dotenv, tendrás que **exportar** las variables en la shell tú mismo.
 
-- `launch_desktop.py` lee `.env` en: carpeta del ejecutable (si está congelado), `cwd`, y raíz del proyecto.
-- `backend/main.py` no implementa dotenv propio para todo; en la práctica **launch** y muchos despliegues cargan antes el entorno.
+### Tabla explicada (no solo nombres)
 
-**Variables relevantes (resumen):**
-
-| Variable | Rol |
-|----------|-----|
-| `GITHUB_CLIENT_ID` | OAuth App de GitHub (device flow o web). |
-| `SECRET_KEY` | Firma de cookies de sesión (Starlette `SessionMiddleware`). |
-| `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI` | OAuth “web” con callback. |
-| `GITHUB_TOKEN`, `GITHUB_LOGIN` | Modo sin login del usuario: el **servidor** consulta GitHub como un solo usuario. |
-| `TAMAGOTCHI_PET_INITIAL_SEC` | Segundos de vida al iniciar / reset (por defecto 300). |
-| `TAMAGOTCHI_COMMIT_BONUS_SEC` | Segundos que suma **cada commit nuevo** contado hoy (por defecto 60). |
-| `TAMAGOTCHI_COMMIT_WINDOW_SEC` | Ventana en segundos para la métrica `commits_last_5m` en el fetcher (por defecto 300). |
-| `HOST`, `PORT` | Bind del servidor (por defecto `127.0.0.1:8000`). |
-| `SKIP_OPEN_BROWSER`, `OPEN_BROWSER`, `UVICORN_RELOAD` | Comportamiento de `main.py`. |
-
----
-
-## 5. Backend: FastAPI y montaje del frontend
-
-- **Framework:** FastAPI.
-- **Sesiones:** `SessionMiddleware` con `SECRET_KEY` para guardar token GitHub y datos del gato.
-- **CORS:** abierto con `credentials` para desarrollo; en producción habría que restringir orígenes.
-- **Estáticos:** si existe el directorio `frontend/`, se monta en `/` con `html=True` (sirve `index.html` en la raíz).
-
-**Orden lógico de una petición `GET /api/status` con OAuth:**
-
-1. Comprobar si OAuth web está configurado y si falta cookie → **401** `github_login_required`.
-2. Instanciar `GithubFetcher` con el token de sesión o con `.env`.
-3. Llamar `activity_metrics(max_event_pages=15)`.
-4. Si hay `session_token`, ejecutar `_ensure_pet_lifecycle` (actualiza `pet_expires_at` y snapshot de commits del día).
-5. Quitar `last_push_at` del dict público (`_activity_for_client`).
-6. Construir `pet_timer` con `_build_pet_timer`.
-7. Calcular `mood` con `_mood_from_activity`.
-8. Devolver JSON `activity`, `mood`, y opcionalmente `pet_timer`.
+| Variable | Para qué la necesitas |
+|----------|------------------------|
+| `GITHUB_CLIENT_ID` | Identificador público de tu OAuth App en GitHub. Sin esto, el login con GitHub no arranca. |
+| `SECRET_KEY` | Cadena larga y aleatoria para **firmar cookies** de sesión. Si la filtras, alguien podría falsificar sesiones: cámbiala en producción. |
+| `GITHUB_CLIENT_SECRET` | Secreto del OAuth App; solo para flujo **web** con callback (`/auth/github/callback`). |
+| `GITHUB_OAUTH_REDIRECT_URI` | URL exacta registrada en GitHub que coincide con tu callback. |
+| `GITHUB_TOKEN` | Token personal u OAuth de **un** usuario; el servidor consulta GitHub **sin** que cada visitante inicie sesión. |
+| `GITHUB_LOGIN` | Nombre de usuario de GitHub a consultar cuando no hay token (solo eventos **públicos**). |
+| `TAMAGOTCHI_PET_INITIAL_SEC` | Segundos de vida al crear/resetear el gato (default 300). |
+| `TAMAGOTCHI_COMMIT_BONUS_SEC` | Segundos que se **añaden por cada commit nuevo** detectado hoy (default 60). |
+| `TAMAGOTCHI_COMMIT_WINDOW_SEC` | Ventana en segundos usada para contar “commits recientes” en métricas tipo `commits_last_5m` (default 300). |
+| `HOST`, `PORT` | Dónde escucha el servidor (default `127.0.0.1` y `8000`). |
+| `SKIP_OPEN_BROWSER`, `OPEN_BROWSER`, `UVICORN_RELOAD` | Comportamiento de `main.py` (abrir navegador, recarga automática al editar código). |
 
 ---
 
-## 6. Autenticación con GitHub (OAuth)
+## 6. Backend: FastAPI y montaje del frontend
 
-Hay **dos familias** de flujo (ver `backend/github_oauth.py` y rutas en `main.py`):
+### ¿Qué es “montar el frontend”?
 
-### 6.1 Device flow (recomendado en clase / sin pegar token)
+Significa que FastAPI **también** responde con archivos estáticos: si pides `/`, te devuelve `frontend/index.html`; si pides `/css/style.css`, sirve ese archivo. No necesitas un segundo servidor solo para la web.
 
-1. El front llama `POST /api/auth/device/start`.
-2. GitHub devuelve `user_code` y `verification_uri`.
-3. El usuario autoriza en GitHub.
-4. El front hace polling a `GET /api/auth/device/status` hasta `status: ok`.
-5. El servidor guarda `github_access_token`, `github_login`, `pet_birth` y en el primer `/api/status` se crea `pet_expires_at` si no existía.
+### Piezas técnicas
 
-### 6.2 OAuth web (redirección)
+- **FastAPI:** defines funciones Python decoradas con `@app.get("/ruta")` que devuelven dicts (se serializan a JSON) o `JSONResponse`.
+- **SessionMiddleware:** antes de llegar a tu ruta, Starlette rellena `request.session` (un diccionario persistente por cookie).
+- **CORS:** en desarrollo suele estar permisivo; en producción real deberías limitar orígenes.
 
-1. `GET /auth/github` redirige a GitHub.
-2. `GET /auth/github/callback` intercambia `code` por token, guarda sesión y redirige a la app.
+### Qué hace el servidor en `GET /api/status` (orden real)
 
-### 6.3 Logout
+Cuando llega una petición con usuario ya autenticado por OAuth (cookie con sesión):
 
-`GET /auth/logout` borra la sesión (`session.clear()`).
+1. Si OAuth está “obligatorio” en configuración y **no** hay `github_access_token` en sesión → responde **401** y un cuerpo que el front interpreta como “hay que iniciar sesión”.
+2. Crea un **`GithubFetcher`** con el token de sesión (o sin token si el modo es `.env`).
+3. Ejecuta **`activity_metrics(max_event_pages=15)`**: esto puede tardar un poco porque pide varias páginas de eventos y a veces GraphQL.
+4. Si hay sesión OAuth, llama **`_ensure_pet_lifecycle`**: aquí se comparan commits de hoy con el snapshot guardado y se alarga `pet_expires_at` si toca.
+5. **`_activity_for_client`**: limpia campos que no quieres exponer tal cual (por ejemplo detalles internos).
+6. **`_build_pet_timer`**: calcula `seconds_remaining` y números para la barra.
+7. **`_mood_from_activity`**: elige `happy` / `neutral` / `angry` / `dead` y el mensaje.
+8. Devuelve JSON con `activity`, `mood` y, si aplica, `pet_timer`.
 
-### 6.4 Estado para el front
-
-`GET /api/auth/status` indica si OAuth está configurado, si device flow está disponible, si hay sesión (`connected`), login, etc.
-
----
-
-## 7. Cómo se obtienen los datos de GitHub
-
-Implementación principal: **`GithubFetcher`** en `backend/github_fetcher.py`.
-
-### 7.1 Identidad del usuario
-
-- Con **token:** `GET https://api.github.com/user` → `login`.
-- Sin token pero con `GITHUB_LOGIN` en env: se usa ese login para eventos **públicos**.
-
-### 7.2 Feed de eventos
-
-- Con token: `GET /users/{login}/events`.
-- Sin token: `GET /users/{login}/events/public`.
-
-Se **pagina** (`page`, `per_page` máx. 100). GitHub limita el historial visible (~300 eventos); si se pide una página que no existe, a veces responde **422**: el código **deja de paginar** y usa lo ya leído (no falla toda la petición).
-
-### 7.3 Qué se cuenta en `activity_metrics`
-
-- **PushEvent:** número de commits del push vía `distinct_size` / `size` del payload (o longitud de `commits` si hace falta).
-- **Ventana `commits_last_5m`:** suma commits de pushes cuya fecha cae dentro de `TAMAGOTCHI_COMMIT_WINDOW_SEC` (alineado con el juego).
-- **Interacciones 7d:** tipos definidos en `_INTERACTION_TYPES` (issues, PRs, comentarios, etc.).
-- **GraphQL** del **calendario de contribuciones** (solo con token): similar al gráfico verde del perfil. El backend hace **`max`** entre cifras del feed y del calendario para varios campos, para no mostrar todo a cero si el feed va vacío.
-
-### 7.4 Campos típicos del objeto `activity`
-
-Incluyen entre otros: `contributions_last_24h`, `contributions_last_7d`, `commits_last_5m`, `interactions_last_7d`, `commits_today_utc`, `commits_this_week_utc`, `commits_in_events_feed`.
-
-**`commits_today_utc`** es clave para el juego: refleja commits en el **día civil UTC** según la lógica del fetcher (eventos + refuerzo con calendario cuando aplica).
+Si GitHub falla o falta configuración, el código intenta devolver un JSON **útil** (ceros y mensaje de error) en lugar de tumbar toda la página sin explicación.
 
 ---
 
-## 8. API HTTP: lista de rutas y contratos
+## 7. Autenticación con GitHub (OAuth)
 
-### 8.1 Núcleo del producto
+### Por qué no pedimos tu contraseña
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/api/health` | Salud; debe incluir `"app": "tamagotchi-github"`. |
-| GET | `/api/auth/status` | Configuración OAuth y si el usuario está conectado. |
-| GET | `/api/status` | Actividad + humor; opcional `pet_timer`; cookie si OAuth. |
+La forma correcta es que **GitHub** te autentique y nos devuelva un **token** con permisos acotados. Así nunca almacenamos tu contraseña.
 
-### 8.2 Mascota y configuración (OAuth)
+### Device flow (muy usado en hackathon)
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/api/reset_pet` | Reinicia `pet_expires_at` y snapshot de commits. Requiere sesión. |
-| GET | `/api/pet_config` | Devuelve `commit_bonus_sec` e `initial_sec` efectivos. |
-| POST | `/api/pet_config` | JSON con uno o ambos campos; guarda en sesión (límites acotados en servidor). |
+Ideal cuando la app es local y no quieres pelearte con redirects:
 
-### 8.3 OAuth auxiliar
+1. El navegador (o pywebview) llama **`POST /api/auth/device/start`**.
+2. El backend pide a GitHub un flujo de dispositivo y recibe `user_code`, `verification_uri`, etc.
+3. Tú abres GitHub en el navegador, introduces el código y aceptas.
+4. El front pregunta cada pocos segundos **`GET /api/auth/device/status`** hasta que el backend ha podido intercambiar el código por token.
+5. El servidor guarda en sesión `github_access_token`, `github_login`, etc. A partir de ahí `/api/status` ya usa **tu** cuenta.
 
-| Método | Ruta |
-|--------|------|
+### OAuth web (redirección)
+
+1. **`GET /auth/github`** → redirección a GitHub.
+2. Usuario acepta → GitHub llama a tu **`/auth/github/callback?code=...`**.
+3. El backend intercambia `code` por token y guarda sesión.
+
+### Logout
+
+**`GET /auth/logout`** vacía la sesión. El gato asociado a esa sesión deja de existir para ese navegador (hasta que vuelvas a iniciar sesión y se cree de nuevo).
+
+### `GET /api/auth/status`
+
+El front usa esto para saber: ¿está configurado OAuth?, ¿puedo usar device flow?, ¿ya hay `connected`?, ¿cuál es mi `login`?
+
+---
+
+## 8. Cómo se obtienen los datos de GitHub
+
+Todo gira en torno a **`GithubFetcher`** (`backend/github_fetcher.py`).
+
+### Identidad
+
+- **Con token:** `GET /user` → campo `login`.
+- **Sin token:** necesitas `GITHUB_LOGIN` en `.env` para saber de qué usuario pedir eventos públicos.
+
+### Feed de eventos
+
+GitHub devuelve una lista de **eventos** (PushEvent, IssuesEvent, etc.). Nosotros nos quedamos sobre todo con **PushEvent** para contar commits asociados a cada push.
+
+La API pagina resultados. Hay un detalle incómodo: más allá de ~300 eventos, pedir otra página puede devolver **HTTP 422**. Eso **no** es un bug nuestro: significa “no hay más páginas”. El código **rompe el bucle** y se queda con lo ya descargado, en lugar de marcar error fatal.
+
+### `activity_metrics`: qué agrega
+
+- Commits por push (usando `distinct_size` / `size` del JSON del push, o la lista de commits si hace falta).
+- **Ventana reciente** (`commits_last_5m` en el JSON del cliente): en realidad usa `TAMAGOTCHI_COMMIT_WINDOW_SEC` segundos hacia atrás desde “ahora” (el nombre histórico dice “5m” pero es configurable).
+- **Interacciones en 7 días:** issues, PRs, comentarios, etc., según tipos definidos en el fetcher.
+- **Calendario de contribuciones (GraphQL)** si hay token: parecido al gráfico verde del perfil. El backend combina con **`max`** frente a cifras del feed para no mostrar todo a cero si una fuente falla o va vacía.
+
+### Campo estrella para el juego: `commits_today_utc`
+
+Es el número de commits que el fetcher considera pertenecientes al **día actual en UTC**. El servidor compara este número entre refrescos para decidir cuántos “commits nuevos” suman tiempo al gato.
+
+---
+
+## 9. API HTTP: rutas y qué devuelven
+
+### Rutas principales
+
+| Método | Ruta | Qué hace en lenguaje humano |
+|--------|------|------------------------------|
+| GET | `/api/health` | “¿El servidor está vivo y es esta app?” |
+| GET | `/api/auth/status` | “¿Puedo loguearme? ¿Ya estoy logueado?” |
+| GET | `/api/status` | “Dame actividad + humor + (si OAuth) datos del temporizador.” |
+
+### Mascota (requiere sesión OAuth)
+
+| Método | Ruta | Qué hace |
+|--------|------|----------|
+| POST | `/api/reset_pet` | Reinicia vida y snapshot de commits. |
+| GET | `/api/pet_config` | Lee bonus e initial efectivos (sesión o defaults). |
+| POST | `/api/pet_config` | Guarda en sesión nuevos valores (con límites en servidor). |
+
+### OAuth
+
 | POST | `/api/auth/device/start` |
 | GET | `/api/auth/device/status` |
 | GET | `/auth/github` |
 | GET | `/auth/github/callback` |
 | GET | `/auth/logout` |
 
-### 8.4 Ejemplo de `GET /api/status` (simplificado)
+### Ejemplo de respuesta de `/api/status`
 
 ```json
 {
@@ -247,127 +353,139 @@ Incluyen entre otros: `contributions_last_24h`, `contributions_last_7d`, `commit
 }
 ```
 
-`pet_timer` **solo** aparece cuando hay sesión OAuth y existe `pet_expires_at` en sesión.
+**`pet_timer`** solo aparece si hay sesión OAuth y ya existe `pet_expires_at` en sesión.
 
 ---
 
-## 9. El juego del gato (solo sesión OAuth)
+## 10. El juego del gato (solo con sesión OAuth)
 
-### 9.1 Variables en sesión (concepto)
+### Idea intuitiva
 
-- **`pet_expires_at`:** timestamp Unix; cuando `time.time() >= pet_expires_at`, el humor pasa a **`dead`**.
-- **`pet_snap_day`:** fecha UTC `YYYY-MM-DD` del snapshot de commits.
-- **`pet_snap_commits_today`:** último valor de `commits_today_utc` visto para ese día, o `-1` tras reset hasta la siguiente lectura.
-- **`pet_commit_bonus_sec`**, **`pet_initial_sec`:** overrides guardados vía `POST /api/pet_config` (si no, defaults de env).
+- Piensa en **`pet_expires_at`** como la **hora límite** (en segundos desde epoch Unix) en la que el gato muere si no has ganado más tiempo.
+- Cada vez que el servidor ve que **`commits_today_utc` ha aumentado** respecto al valor guardado **en el mismo día UTC**, interpreta que has hecho **N commits nuevos** y hace:  
+  **nuevo límite = límite anterior + N × bonus**  
+  (solo si el gato **aún no** había expirado en ese momento).
 
-### 9.2 Inicialización (`_ensure_pet_lifecycle`)
+### Variables en sesión (qué significan)
 
-- Si no hay `pet_expires_at`, se crea: `now + initial_sec`.
-- Si el día UTC cambia respecto a `pet_snap_day`, se actualiza el snapshot sin dar “bonus fantasma” por cambio de día.
-- Si `commits_today_utc` **sube** respecto al snapshot **el mismo día** y el gato **sigue vivo** (`exp > now`), se hace:  
-  `pet_expires_at += (delta_commits) * commit_bonus_sec`.
-- Siempre se actualiza `pet_snap_commits_today` al valor actual de `commits_today_utc`.
+- **`pet_expires_at`:** momento exacto (timestamp) en el que el tiempo se agota.
+- **`pet_snap_day`:** qué día UTC estamos usando para el snapshot (string `YYYY-MM-DD`).
+- **`pet_snap_commits_today`:** último `commits_today_utc` que ya “contamos” para no volver a bonificar los mismos commits.
+- **`pet_commit_bonus_sec` / `pet_initial_sec`:** si el usuario los cambió en el formulario, aquí están los overrides.
 
-### 9.3 Reset (`POST /api/reset_pet`)
+### `_ensure_pet_lifecycle` (lógica de negocio)
 
-- Nuevo `pet_expires_at = now + initial_sec`.
-- `pet_snap_commits_today = -1` para que en la siguiente lectura se re-baselinee sin contar commits viejos como nuevos.
+- Si no existía `pet_expires_at`, se crea como **ahora + initial_sec**.
+- Si cambia el día UTC, se actualiza el día del snapshot sin aplicar trucos raros entre días.
+- Si suben los commits hoy y el gato sigue vivo, se extiende la expiración.
+- Siempre se actualiza el snapshot al último `commits_today_utc` visto.
 
-### 9.4 `pet_timer` (`_build_pet_timer`)
+### Reset
 
-Calcula `seconds_remaining = max(0, floor(pet_expires_at - now))` y metadatos para la UI (bonus, denominador de barra, etc.).
+**`POST /api/reset_pet`:** nueva expiración = ahora + initial; snapshot de commits a **-1** para que en el **siguiente** `/api/status` se re-base el contador y no cuentes commits antiguos como si fueran recién hechos.
 
----
+### `pet_timer`
 
-## 10. Humor (`mood`): reglas en el servidor
-
-Función: **`_mood_from_activity`** en `backend/main.py`. Orden relevante:
-
-1. **Con `pet_expires_at` (OAuth):** si el tiempo se agotó → **`dead`**.
-2. **Sin `pet_expires_at` (modo env):** si no hay commits ni interacciones en la ventana usada → **`dead`**.
-3. **Urgencia por poco tiempo** (OAuth, aún vivo): si quedan pocos segundos → **`angry`** con mensaje de apuro.
-4. **Poca actividad semanal** (OAuth, con commits recientes en ventana): otro **`angry`** “triste”.
-5. **Mucha actividad:** **`happy`**.
-6. **Casi nada en la semana:** **`angry`** genérico.
-7. **Por defecto:** **`neutral`**.
-
-Los valores exactos de umbrales están en el código fuente (líneas de `_mood_from_activity`).
+Es la “foto” para la UI: cuántos segundos quedan **ahora**, con qué bonus, con qué denominador pintar la barra, etc. El servidor manda un valor; el cliente lo usa como **ancla** y entre peticiones **interpola** hacia abajo cada segundo para suavidad.
 
 ---
 
-## 11. Frontend: archivos y flujo
+## 11. Humor del gato (`mood`): reglas exactas del código
 
-### 11.1 Entrada
+La función es **`_mood_from_activity`** en `backend/main.py`. Se evalúa **en este orden** (lo primero que coincida gana):
 
-- `index.html` carga `js/app.js` como módulo ES.
+1. **OAuth con `pet_expires_at`:** si `ahora >= pet_expires_at` → **`dead`**, mensaje de tiempo agotado y pista de “Nuevo gato” o commits.
 
-### 11.2 `frontend/js/config.js`
+2. **Sin `pet_expires_at` (modo `.env` sin reloj de mascota):** si `contributions_last_7d == 0` **y** `interactions_last_7d == 0` → **`dead`**, mensaje “Has matado al gato :(”.
 
-- `API_CONFIG.baseUrl` vacío = **mismo origen** que la página.
-- `?mock=1` → datos ficticios sin llamar al backend.
-- `?float=1` → **poll cada 5 s** (ventana flotante); sin `float`, **60 s** entre refrescos automáticos.
+3. **Poco tiempo restante (OAuth, aún vivo):** si `seconds_remaining > 0` y además `seconds_remaining <= max(30, initial_sec // 5)` → **`angry`**, mensaje de urgencia con los segundos aproximados.
 
-### 11.3 `frontend/js/app.js`
+4. **Tristeza por ritmo (OAuth, aún vivo):** si quedan segundos, `commits_last_7d <= 2`, `contributions_last_24h == 0` y `commits_last_5m > 0` → **`angry`**, mensaje de poca actividad semanal.
 
-- Pregunta **`/api/auth/status`** al cargar.
-- Si hace falta login, muestra la **puerta** (`auth-gate`) y gestiona **device flow** (start, polling, UI).
-- Si hay sesión o modo env con token en servidor, llama **`startApp`**: refresco periódico, botón **Nuevo gato**, formulario **Configuración** (`fetchPetConfig` / `savePetConfig`).
-- **`startPetLiveTicker`:** cada **1 s** repinta contador y barra usando el último `seconds_remaining` del servidor como ancla en el tiempo (bajada fluida).
+5. **Muy activo:** si `contributions_last_7d >= 20` **o** `contributions_last_24h >= 8` → **`happy`**.
 
-### 11.4 `frontend/js/api.js`
+6. **Casi inactivo:** si `commits_last_7d == 0` y `contributions_last_24h == 0` y `interactions_last_7d <= 1` → **`angry`**.
 
-- `fetchStatus`, `fetchAuthStatus`, `resetPet`, `fetchPetConfig`, `savePetConfig`.
-- Construcción de URLs con `apiUrl()` para mismo origen o base configurable.
+7. **Por defecto:** **`neutral`** con un resumen numérico de la semana.
 
-### 11.5 `frontend/js/ui.js`
-
-- **`renderStatus`:** mascota según `mood`, badge, texto, commits hoy, visibilidad del timer.
-- **`syncPetLiveClock` / `paintPetLiveFrame`:** reloj local + colores de vida (verde → amarillo → rojo → crítico).
-- **`data-pet-local-dead`:** si el contador local llega a 0 antes del siguiente fetch, fuerza UI **muerta** y muestra **Nuevo gato**.
-- **`renderError`:** estado de error; limpia reloj en vivo.
-
-### 11.6 `frontend/shared/status.js`
-
-- **`normalizeStatusPayload`:** parsea `activity`, `mood`, `auth_hint`, `pet_timer` con defaults seguros.
+Así puedes explicar en la defensa **por qué** un usuario ve `angry` aunque el temporizador no haya llegado a cero: el humor mezcla **tiempo** y **métricas de actividad**.
 
 ---
 
-## 12. Ventana flotante (pywebview)
+## 12. Frontend: archivos y flujo detallado
 
-- **`tamagotchi-float/run.py`** crea ventana con URL por defecto `http://127.0.0.1:8000/?float=1`.
-- **`private_mode=False`** y **`storage_path`** persistente para que la **cookie de sesión** sobreviva entre ejecuciones (similar a un navegador).
-- Bucle opcional que refuerza **`on_top`** cada segundo.
+### Punto de entrada
 
-**Linux:** suelen hacer falta paquetes GTK/WebKit del sistema y a veces venv con `--system-site-packages` para PyGObject (ver `tamagotchi-float/README.md`).
+`index.html` carga **`js/app.js`** como **módulo ES** (`type="module"`). Eso permite `import` entre archivos JS.
 
-**Windows:** suele usarse el motor WebView2 (Edge).
+### `config.js`
 
----
+- **`API_CONFIG.baseUrl`:** cadena vacía = las peticiones van al **mismo host** que la página (típico).
+- **`?mock=1`:** no llama al backend; genera datos falsos para diseñar la UI sin GitHub.
+- **`?float=1`:** modo ventana flotante → intervalo de refresco **5 s**; sin eso, **60 s**.
 
-## 13. Empaquetado con PyInstaller
+### `app.js` (orquestación)
 
-- Especificación: **`tamagotchi.spec`** (incluye `frontend/`, `backend/`, `tamagotchi-float/run.py` y dependencias recogidas con `collect_all`).
-- Script: **`packaging/build-binary.sh`** (Linux/macOS; en Windows se puede invocar `pyinstaller` directamente).
-- **Importante:** se genera el binario **solo para el SO donde compilas** (no un .exe desde Linux sin cross-compile).
-- **`launch_desktop.py`** detecta `sys.frozen` y usa **`sys._MEIPASS`** como raíz del proyecto empaquetado.
-- **No subir** `build/`, `dist/`, ni carpetas grandes de PyInstaller a GitHub (límite 100 MB por archivo; además ensucian el repo).
+1. Al cargar: **`fetchAuthStatus`**.
+2. Si toca login: muestra **`auth-gate`**, inicia device flow o enlaces según respuesta del servidor.
+3. Si ya hay datos: **`startApp`** registra el intervalo de **`fetchStatus`**, enseña botón **Nuevo gato** y formulario de **configuración** del gato.
+4. **`startPetLiveTicker`:** cada **1000 ms** llama a la lógica que **decrementa visualmente** el tiempo usando la última respuesta del servidor como referencia temporal.
 
----
+### `api.js`
 
-## 14. Buenas prácticas con Git
+Centraliza URLs (`apiUrl`), `fetch` con `credentials: 'include'` donde hace falta (para mandar la **cookie de sesión**), y funciones nombradas (`fetchStatus`, `resetPet`, …).
 
-- Mantener **`build/`**, **`dist/`**, `buildpyinstaller/`, etc. en **`.gitignore`**.
-- Los **secretos** van en `.env` local o en un canal seguro del equipo, no en commits públicos.
-- Si se filtró un secreto, **rotarlo** en GitHub OAuth App y en `.env`.
+### `ui.js` (presentación)
 
----
+- **`renderStatus`:** traduce el último JSON a DOM: imagen del gato, clases CSS, texto, visibilidad del bloque del timer.
+- **`syncPetLiveClock` / `paintPetLiveFrame`:** colores de la barra (verde → amarillo → rojo → crítico) según fracción de tiempo restante.
+- **Atributo `data-pet-local-dead`:** si el reloj local llega a 0 antes del próximo fetch, la UI muestra **muerto** de inmediato y deja listo el flujo de **Nuevo gato**.
+- **`renderError`:** estado roto/red/GitHub; para el ticker para no mostrar números mentirosos.
 
-## Referencias cruzadas
+### `shared/status.js`
 
-- Contrato técnico del fetcher y extensiones: **`docs/BACKEND.md`**.
-- Plantilla de variables: **`.env.example`**.
-- API interactiva en marcha: **`http://127.0.0.1:8000/docs`**.
+**`normalizeStatusPayload`** asegura que aunque falte algún campo en el JSON, el resto del código recibe números por defecto (0) y objetos vacíos razonables. Así hay **un solo contrato** de datos para la UI.
 
 ---
 
-*Última revisión alineada con el código del repositorio (FastAPI, relógio `pet_expires_at`, `pet_timer`, front con ticker 1 s y muerte local).*
+## 13. Ventana flotante (pywebview)
+
+**`tamagotchi-float/run.py`** crea una ventana nativa que por dentro renderiza HTML con el motor web del sistema.
+
+- URL por defecto con **`?float=1`** para el polling rápido.
+- **`private_mode=False`** y **`storage_path`** persistente: las **cookies** (sesión OAuth) pueden **sobrevivir** entre ejecuciones, como en un navegador normal.
+- Opcionalmente mantiene la ventana **siempre encima** (`on_top`).
+
+**Linux:** a menudo necesitas librerías GTK/WebKit del sistema; a veces un venv con acceso a paquetes del sistema para PyGObject. Detalles en `tamagotchi-float/README.md`.
+
+**Windows:** suele usarse **WebView2** (componente de Edge).
+
+---
+
+## 14. Empaquetado con PyInstaller
+
+- **`tamagotchi.spec`** lista qué carpetas copiar (`frontend`, `backend`, etc.) y qué dependencias empaquetar.
+- **`packaging/build-binary.sh`** automatiza el build en Unix.
+- El binario resultante es **específico del sistema operativo** donde compilas.
+- En runtime, **`sys.frozen`** y **`sys._MEIPASS`** indican “estoy dentro del exe” y dónde están los archivos extraídos.
+- **No subas** `build/`, `dist/`, ni artefactos enormes a GitHub: superan límites y ensucian el historial.
+
+---
+
+## 15. Buenas prácticas con Git
+
+- Ignora en **`.gitignore`** carpetas de build (`build/`, `dist/`, `buildpyinstaller/`, etc.).
+- Nunca commitees **`.env`** con secretos reales en un repo público.
+- Si un token se filtró, **revócalo** en GitHub y genera otro.
+
+---
+
+## 16. Referencias
+
+- Contrato y detalle del fetcher: **`docs/BACKEND.md`**
+- Plantilla de entorno: **`.env.example`**
+- API interactiva con el servidor en marcha: **`http://127.0.0.1:8000/docs`**
+
+---
+
+*Guía ampliada para lectores sin contexto previo del proyecto; alineada con el reloj `pet_expires_at`, `pet_timer`, ticker de 1 s en el front y reglas de `_mood_from_activity` en `backend/main.py`.*
