@@ -155,6 +155,15 @@ class GithubFetcher:
                 try:
                     r.raise_for_status()
                 except httpx.HTTPStatusError as e:
+                    # Más allá de ~300 eventos GitHub devuelve 422 (no hay página), no JSON vacío.
+                    if e.response.status_code == 422 and page > 1:
+                        if _github_terminal_logs_enabled():
+                            logger.info(
+                                "GitHub GET %s page=%s → 422: fin del feed de eventos (~300 máx.); se usan las páginas ya leídas",
+                                path,
+                                page,
+                            )
+                        break
                     snippet = (e.response.text or "")[:500].replace("\n", " ")
                     logger.error(
                         "GitHub GET %s page=%s → HTTP %s %r %s",
@@ -332,10 +341,12 @@ class GithubFetcher:
         now = datetime.now(timezone.utc)
         cut24 = now - timedelta(hours=24)
         cut7 = now - timedelta(days=7)
+        cut5m = now - timedelta(minutes=5)
         start_day = _utc_start_of_day(now)
         start_week = _utc_start_of_iso_week(now)
         commits_24h = 0
         commits_7d = 0
+        commits_last_5m = 0
         commits_today = 0
         commits_this_week = 0
         commits_in_feed = 0
@@ -356,6 +367,8 @@ class GithubFetcher:
                 payload = ev.get("payload") if isinstance(ev.get("payload"), dict) else {}
                 n = self._push_commit_count(payload)
                 commits_in_feed += n
+                if t >= cut5m:
+                    commits_last_5m += n
                 if t >= start_day:
                     commits_today += n
                 if t >= start_week:
@@ -422,6 +435,7 @@ class GithubFetcher:
         return {
             "contributions_last_24h": commits_24h,
             "contributions_last_7d": commits_7d,
+            "commits_last_5m": commits_last_5m,
             "interactions_last_7d": interactions_7d,
             "commits_today_utc": commits_today,
             "commits_this_week_utc": commits_this_week,

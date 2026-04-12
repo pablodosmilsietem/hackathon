@@ -14,6 +14,7 @@ const MOCK_STATUS = {
   activity: {
     contributions_last_24h: 4,
     contributions_last_7d: 23,
+    commits_last_5m: 1,
     interactions_last_7d: 12,
     commits_today_utc: 2,
     commits_this_week_utc: 18,
@@ -109,4 +110,36 @@ export async function fetchStatus() {
   }
 
   return normalizeStatusPayload(json);
+}
+
+/**
+ * Reinicia la fecha de nacimiento de la mascota (sesión OAuth). Requiere cookie de sesión.
+ * @returns {Promise<{ status: string }>}
+ */
+export async function resetPet() {
+  if (isMockMode()) {
+    return { status: "pet_reset" };
+  }
+  const path = "/api/reset_pet";
+  const base = API_CONFIG.baseUrl.replace(/\/$/, "");
+  const url = base ? `${base}${path}` : path;
+  const res = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  if (res.status === 401) {
+    throw new Error("Hace falta sesión con GitHub para reiniciar la mascota.");
+  }
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      if (j && typeof j.detail === "string") detail = j.detail;
+    } catch {
+      /* */
+    }
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
+  return res.json();
 }

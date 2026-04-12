@@ -2,11 +2,12 @@
  * Contrato API + presentación del humor: una sola fuente para web y extensión VS Code.
  * Si cambian campos JSON o alias, edita solo este archivo.
  *
- * @typedef {'happy'|'neutral'|'angry'} Mood
+ * @typedef {'happy'|'neutral'|'angry'|'dead'} Mood
  *
  * @typedef {Object} GitHubActivity
  * @property {number} contributions_last_24h
  * @property {number} contributions_last_7d
+ * @property {number} commits_last_5m commits en PushEvent en los últimos ~5 min (UTC)
  * @property {number} interactions_last_7d
  * @property {number} commits_today_utc commits en el día civil UTC (fecha del push)
  * @property {number} commits_this_week_utc semana ISO lun–dom UTC
@@ -80,6 +81,7 @@ export function normalizeStatusPayload(data) {
         "github_contributions_last_7d",
         "commits_last_7d",
       ]),
+      commits_last_5m: pickActivityInt(activity, ["commits_last_5m"]),
       interactions_last_7d: pickActivityInt(activity, [
         "interactions_last_7d",
         "github_interactions_last_7d",

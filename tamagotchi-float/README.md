@@ -1,6 +1,6 @@
 # Tamagotchi flotante
 
-**Esta es la app principal:** ventana con **pywebview** que carga el mismo backend que `python main.py`, con **`?float=1`** (poll **cada 5 s**, sin botón “Actualizar”) y **`on_top`**. El “frontend web” solo es el HTML que renderiza esta ventana; no hace falta abrir Chrome si no quieres.
+**Esta es la app principal:** ventana con **pywebview** que carga el mismo backend que `python main.py`, con **`?float=1`** (poll **cada 5 s**, datos **sin botón manual**; solo aparece **«Nuevo gato»** si el humor es muerto y hay sesión OAuth) y **`on_top`**. El “frontend web” solo es el HTML que renderiza esta ventana; no hace falta abrir Chrome si no quieres.
 
 Funciona en **Linux** (GTK) y en **Windows** (WebView2). **Login con GitHub (OAuth)** funciona aquí igual que en el navegador (misma URL y cookies).
 

@@ -7,7 +7,7 @@ const PET_SVG = {
   happy: "images/pet-happy.svg",
   neutral: "images/pet-neutral.svg",
   angry: "images/pet-angry.svg",
-  dead: "images/pet-error.svg"
+  dead: "images/pet-dead.svg",
 };
 
 const PET_ERROR = "images/pet-error.svg";
@@ -89,13 +89,12 @@ export function renderError(message, root) {
 }
 
 /**
- * Actualización en segundo plano: no atenúa la pantalla ni cambia la mascota al huevo
- * (evita el parpadeo al recargar o al refresco automático en modo flotante).
+ * Indica carga en curso; deshabilita «Nuevo gato» si está visible (el refresco es solo por intervalo).
  *
  * @param {HTMLElement} root
  */
 export function setLoading(root, loading) {
   root.toggleAttribute("aria-busy", loading);
-  const btn = root.querySelector("[data-action-refresh]");
-  if (btn instanceof HTMLButtonElement) btn.disabled = loading;
+  const resetBtn = root.querySelector("[data-action-reset-pet]");
+  if (resetBtn instanceof HTMLButtonElement && !resetBtn.hidden) resetBtn.disabled = loading;
 }

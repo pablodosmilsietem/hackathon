@@ -50,7 +50,7 @@ def _pin_always_on_top_loop() -> None:
 
 
 def main() -> int:
-    # ?float=1 → front: poll cada 5 s y sin botón Actualizar (ver frontend/js/app.js)
+    # ?float=1 → front: poll cada 5 s, actualización automática; «Nuevo gato» si humor muerto + OAuth
     default_url = os.environ.get("TAMAGOTCHI_FLOAT_URL", "http://127.0.0.1:8000/?float=1")
 
     p = argparse.ArgumentParser(description="Mini ventana flotante (always on top) del Tamagotchi.")

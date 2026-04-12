@@ -62,6 +62,9 @@ FRONTEND_DIR = ROOT_DIR / "frontend"
 
 _SESSION_SECRET = os.environ.get("SECRET_KEY", "dev-insecure-cambia-SECRET_KEY-en-produccion")
 
+# Con sesión OAuth: el gato muere si no hay commits en esta ventana (segundos). Gracia tras login = misma duración.
+_PET_COMMIT_WINDOW_SEC = int(os.environ.get("TAMAGOTCHI_COMMIT_WINDOW_SEC", str(5 * 60)))
+
 
 def _sanitize_return_to(raw: str | None) -> str:
     """Solo rutas relativas (evita redirecciones abiertas)."""
@@ -338,14 +341,17 @@ def _mood_from_activity(activity: dict[str, int], pet_birth: float | None = None
     c24 = activity["contributions_last_24h"]
     c7 = activity["contributions_last_7d"]
     i7 = activity["interactions_last_7d"]
+    c5m = int(activity.get("commits_last_5m", 0))
     now = time.time()
+    win = max(1, _PET_COMMIT_WINDOW_SEC)
 
-    if pet_birth: 
-        days_since_birth = (now-pet_birth) / 24* 60 * 60
-        if days_since_birth >= 7 and c7 == 0:
+    if pet_birth:
+        # Tras la gracia inicial: hace falta al menos un push con commits en la ventana (feed de eventos).
+        if (now - pet_birth) >= win and c5m == 0:
+            mins = (win + 59) // 60
             return {
                 "mood": "dead",
-                "message": "Has matado al gato :("
+                "message": f"Llevas más de {mins} min sin commits en GitHub. Has matado al gato :(",
             }
 
     else:
@@ -406,6 +412,7 @@ def api_status(request: Request):
             "activity": {
                 "contributions_last_24h": 0,
                 "contributions_last_7d": 0,
+                "commits_last_5m": 0,
                 "interactions_last_7d": 0,
                 "commits_today_utc": 0,
                 "commits_this_week_utc": 0,
@@ -425,6 +432,7 @@ def api_status(request: Request):
             "activity": {
                 "contributions_last_24h": 0,
                 "contributions_last_7d": 0,
+                "commits_last_5m": 0,
                 "interactions_last_7d": 0,
                 "commits_today_utc": 0,
                 "commits_this_week_utc": 0,

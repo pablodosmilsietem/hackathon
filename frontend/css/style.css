@@ -9,7 +9,7 @@
   --neutral: #e0c36a;
   --angry: #f08080;
   --accent: #7aa2f7;
-  --dead: #e8eaf0
+  --dead: #b8bcc8;
   /* Texto UI */
   font-family: "Segoe UI", system-ui, sans-serif;
   line-height: 1.45;
@@ -115,6 +115,11 @@ body {
   animation: none;
 }
 
+.pet--dead .pet__img {
+  filter: grayscale(0.55) brightness(0.88);
+  animation: none;
+}
+
 @keyframes pet-shake {
   0%,
   100% {
@@ -160,8 +165,8 @@ body {
 }
 
 .mood-badge--dead {
-  background: rgba(240, 240, 240, 240);
-  color: var(--dead)
+  background: rgba(184, 188, 200, 0.2);
+  color: var(--dead);
 }
 
 .mood-text {

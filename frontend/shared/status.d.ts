@@ -1,9 +1,10 @@
-export type Mood = "happy" | "neutral" | "angry";
+export type Mood = "happy" | "neutral" | "angry" | "dead";
 
 export interface StatusPayload {
   activity: {
     contributions_last_24h: number;
     contributions_last_7d: number;
+    commits_last_5m: number;
     interactions_last_7d: number;
     commits_today_utc: number;
     commits_this_week_utc: number;

@@ -139,8 +139,10 @@
             <code>/users/…/events</code>; no es el histórico completo de la cuenta.
           </p>
         </div>
-        <div class="device__actions">
-          <button type="button" class="btn" data-action-refresh>Actualizar</button>
+        <div class="device__actions" data-device-actions hidden>
+          <button type="button" class="btn btn--secondary" data-action-reset-pet hidden>
+            Nuevo gato
+          </button>
         </div>
       </div>
 
@@ -157,6 +159,6 @@
       const hint = document.querySelector("[data-mock-hint]");
       if (hint && isMockMode()) hint.hidden = false;
     </script>
-    <script src="js/app.js?v=11" type="module"></script>
+    <script src="js/app.js?v=13" type="module"></script>
   </body>
 </html>

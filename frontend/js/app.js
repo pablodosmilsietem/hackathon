@@ -1,5 +1,5 @@
 import { isFloatMode, isMockMode } from "./config.js";
-import { fetchAuthStatus, fetchStatus } from "./api.js";
+import { fetchAuthStatus, fetchStatus, resetPet } from "./api.js";
 import { renderError, renderStatus, setLoading } from "./ui.js";
 
 const POLL_MS = isFloatMode() ? 5_000 : 60_000;
@@ -323,6 +323,7 @@ async function refresh() {
   try {
     const data = await fetchStatus();
     renderStatus(data, root);
+    syncResetPetButton(data, root);
     const banner = document.querySelector("[data-connect-banner]");
     if (data.authHint === "needs_github_connect") {
       wireAuthLinks();
@@ -337,6 +338,7 @@ async function refresh() {
     }
   } catch (e) {
     if (e instanceof Error && e.name === "AuthRequiredError") {
+      hideResetActionsRow(root);
       clearSessionHint();
       wireAuthLinks();
       syncConnectButtons(lastAuthStatus);
@@ -347,6 +349,7 @@ async function refresh() {
       return;
     }
     const msg = e instanceof Error ? e.message : "Error desconocido";
+    hideResetActionsRow(root);
     renderError(
       isMockMode()
         ? `${msg} (revisa MOCK en api.js o shared/status.js)`
@@ -358,19 +361,48 @@ async function refresh() {
   }
 }
 
+/**
+ * Muestra «Nuevo gato» solo con humor muerto y sesión OAuth (el backend exige cookie).
+ * @param {import('./api.js').StatusPayload} data
+ * @param {HTMLElement} root
+ */
+function syncResetPetButton(data, root) {
+  const btn = root.querySelector("[data-action-reset-pet]");
+  const row = root.querySelector("[data-device-actions]");
+  if (!(btn instanceof HTMLButtonElement)) return;
+  const show = data.mood.mood === "dead" && lastAuthStatus?.connected === true;
+  btn.hidden = !show;
+  if (row instanceof HTMLElement) row.hidden = !show;
+  if (!show) btn.disabled = false;
+}
+
+/** Oculta la fila de acciones (p. ej. error de red: no mostrar reset hasta nuevo estado válido). */
+function hideResetActionsRow(root) {
+  const btn = root.querySelector("[data-action-reset-pet]");
+  const row = root.querySelector("[data-device-actions]");
+  if (btn instanceof HTMLButtonElement) {
+    btn.hidden = true;
+    btn.disabled = false;
+  }
+  if (row instanceof HTMLElement) row.hidden = true;
+}
+
 function startApp(root) {
   wireAuthLinks();
   syncConnectButtons(lastAuthStatus);
 
-  if (isFloatMode()) {
-    const actions = root.querySelector(".device__actions");
-    if (actions) actions.remove();
-  } else {
-    const refreshBtn = root.querySelector("[data-action-refresh]");
-    refreshBtn?.addEventListener("click", () => {
-      void refresh();
-    });
-  }
+  root.querySelector("[data-action-reset-pet]")?.addEventListener("click", () => {
+    void (async () => {
+      try {
+        await resetPet();
+        await refresh();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Error al reiniciar";
+        const moodText = root.querySelector("[data-mood-text]");
+        if (moodText) moodText.textContent = msg;
+      }
+    })();
+  });
 
   const logoutRow = document.querySelector("[data-session-logout]");
   if (logoutRow && lastAuthStatus?.connected) {
