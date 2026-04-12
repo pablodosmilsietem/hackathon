@@ -120,6 +120,44 @@ body {
   animation: none;
 }
 
+/* Urgencia por tiempo de vida (OAuth): verde → amarillo → rojo → agobiado */
+.pet--life-ok .pet__img {
+  filter: drop-shadow(0 0 11px rgba(95, 210, 140, 0.55)) saturate(1.12) brightness(1.04);
+  transition: filter 0.6s ease;
+}
+
+.pet--life-warn .pet__img {
+  filter: drop-shadow(0 0 10px rgba(224, 195, 106, 0.65)) saturate(1.08) hue-rotate(-8deg);
+  transition: filter 0.6s ease;
+}
+
+.pet--life-danger .pet__img {
+  filter: drop-shadow(0 0 12px rgba(240, 120, 100, 0.75)) saturate(1.15) hue-rotate(-18deg);
+  transition: filter 0.6s ease;
+}
+
+.pet--life-sad.pet--angry {
+  animation: pet-sad-worry 1.25s ease-in-out infinite;
+}
+
+.pet--life-sad .pet__img {
+  filter: drop-shadow(0 0 8px rgba(180, 100, 120, 0.5)) grayscale(0.25) saturate(0.85);
+  transition: filter 0.5s ease;
+}
+
+@keyframes pet-sad-worry {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  35% {
+    transform: translateY(2px) rotate(-1.5deg);
+  }
+  70% {
+    transform: translateY(1px) rotate(1.5deg);
+  }
+}
+
 @keyframes pet-shake {
   0%,
   100% {
@@ -178,6 +216,44 @@ body {
   padding: 0 0.25rem;
 }
 
+.pet-timer {
+  width: 100%;
+  max-width: 16rem;
+  margin: 0.15rem 0 0;
+}
+
+.pet-timer__label {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--muted);
+}
+
+.pet-timer__track {
+  height: 5px;
+  border-radius: 999px;
+  background: #2c3244;
+  overflow: hidden;
+}
+
+.pet-timer__fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--neutral), var(--happy));
+  transition: width 0.92s linear;
+}
+
+.pet-timer--urgent .pet-timer__fill {
+  background: linear-gradient(90deg, var(--angry), #f5a623);
+}
+
+.pet-timer--urgent .pet-timer__label {
+  color: var(--angry);
+  font-weight: 600;
+}
+
 .connect-banner {
   margin: 0.5rem 0 0.35rem;
 }
@@ -208,37 +284,98 @@ body {
   color: var(--muted);
 }
 
-.stats {
+.commits-today {
   width: 100%;
-  margin-top: 0.35rem;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.35rem 0.75rem;
-  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.5rem;
+  background: rgba(42, 49, 68, 0.65);
+  border: 1px solid #2c3244;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.stats dt {
-  margin: 0;
+.commits-today__label {
+  font-size: 0.75rem;
   color: var(--muted);
-}
-
-.stats dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
   font-weight: 600;
-  text-align: right;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.stats__hint {
-  margin: 0.5rem 0 0;
-  font-size: 0.68rem;
-  line-height: 1.4;
+.commits-today__value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.app-config {
+  width: 100%;
+  margin-top: 0.65rem;
+  border-radius: 0.5rem;
+  border: 1px solid #2c3244;
+  background: rgba(15, 18, 24, 0.5);
+  padding: 0.35rem 0.5rem 0.5rem;
+}
+
+.app-config__summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  list-style: none;
+}
+
+.app-config__summary::-webkit-details-marker {
+  display: none;
+}
+
+.app-config__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid #2a3145;
+}
+
+.app-config__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.app-config__field-label {
+  font-size: 0.72rem;
   color: var(--muted);
 }
 
-.stats__hint code {
-  font-size: 0.9em;
-  word-break: break-all;
+.app-config__input {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.35rem;
+  border: 1px solid #2c3244;
+  background: #0f1218;
+  color: var(--text);
+}
+
+.app-config__submit {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+}
+
+.app-config__msg {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--muted);
 }
 
 .device__actions {

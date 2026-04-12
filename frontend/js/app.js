@@ -1,6 +1,6 @@
 import { isFloatMode, isMockMode } from "./config.js";
-import { fetchAuthStatus, fetchStatus, resetPet } from "./api.js";
-import { renderError, renderStatus, setLoading } from "./ui.js";
+import { fetchAuthStatus, fetchPetConfig, fetchStatus, resetPet, savePetConfig } from "./api.js";
+import { renderError, renderStatus, setLoading, startPetLiveTicker } from "./ui.js";
 
 const POLL_MS = isFloatMode() ? 5_000 : 60_000;
 
@@ -387,9 +387,66 @@ function hideResetActionsRow(root) {
   if (row instanceof HTMLElement) row.hidden = true;
 }
 
+function wirePetConfigForm() {
+  const form = document.querySelector("[data-pet-config-form]");
+  if (!form || !(form instanceof HTMLFormElement)) return;
+  if (form.dataset.wired === "1") return;
+  form.dataset.wired = "1";
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    void (async () => {
+      const msg = document.querySelector("[data-pet-config-msg]");
+      const fd = new FormData(form);
+      const initialRaw = fd.get("initial_sec");
+      const bonusRaw = fd.get("commit_bonus_sec");
+      const initial_sec = typeof initialRaw === "string" ? parseInt(initialRaw, 10) : NaN;
+      const commit_bonus_sec = typeof bonusRaw === "string" ? parseInt(bonusRaw, 10) : NaN;
+      if (msg) msg.textContent = "";
+      if (!Number.isFinite(initial_sec) || !Number.isFinite(commit_bonus_sec)) {
+        if (msg) msg.textContent = "Números no válidos.";
+        return;
+      }
+      try {
+        await savePetConfig({ initial_sec, commit_bonus_sec });
+        if (msg) {
+          msg.textContent =
+            "Guardado. El bonus aplica en el siguiente commit nuevo. El tiempo inicial, al pulsar «Nuevo gato» o al reconectar.";
+        }
+      } catch (er) {
+        if (msg) msg.textContent = er instanceof Error ? er.message : "Error al guardar.";
+      }
+    })();
+  });
+}
+
+async function loadPetConfigForm() {
+  const panel = document.querySelector("[data-app-config]");
+  if (!panel) return;
+  if (isMockMode() || !lastAuthStatus?.connected) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  const msg = document.querySelector("[data-pet-config-msg]");
+  if (msg) msg.textContent = "";
+  try {
+    const c = await fetchPetConfig();
+    const form = document.querySelector("[data-pet-config-form]");
+    const ini = form?.querySelector("[name='initial_sec']");
+    const bon = form?.querySelector("[name='commit_bonus_sec']");
+    if (ini instanceof HTMLInputElement) ini.value = String(c.initial_sec);
+    if (bon instanceof HTMLInputElement) bon.value = String(c.commit_bonus_sec);
+  } catch {
+    if (msg) msg.textContent = "No se pudo cargar la configuración.";
+  }
+}
+
 function startApp(root) {
   wireAuthLinks();
   syncConnectButtons(lastAuthStatus);
+
+  wirePetConfigForm();
+  void loadPetConfigForm();
 
   root.querySelector("[data-action-reset-pet]")?.addEventListener("click", () => {
     void (async () => {
@@ -408,6 +465,8 @@ function startApp(root) {
   if (logoutRow && lastAuthStatus?.connected) {
     logoutRow.hidden = false;
   }
+
+  startPetLiveTicker(getRoot);
 
   void refresh();
   setInterval(() => {

@@ -15,7 +15,9 @@ import secrets
 import threading
 import time
 import webbrowser
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -62,8 +64,103 @@ FRONTEND_DIR = ROOT_DIR / "frontend"
 
 _SESSION_SECRET = os.environ.get("SECRET_KEY", "dev-insecure-cambia-SECRET_KEY-en-produccion")
 
-# Con sesión OAuth: el gato muere si no hay commits en esta ventana (segundos). Gracia tras login = misma duración.
-_PET_COMMIT_WINDOW_SEC = int(os.environ.get("TAMAGOTCHI_COMMIT_WINDOW_SEC", str(5 * 60)))
+# Reloj del gato (OAuth): tiempo inicial + bonificación por cada commit nuevo contado hoy (UTC).
+_PET_INITIAL_DEFAULT = int(os.environ.get("TAMAGOTCHI_PET_INITIAL_SEC", str(5 * 60)))
+_PET_BONUS_DEFAULT = int(os.environ.get("TAMAGOTCHI_COMMIT_BONUS_SEC", str(60)))
+_PET_INITIAL_MIN = 30
+_PET_INITIAL_MAX = 86400
+_PET_BONUS_MIN = 1
+_PET_BONUS_MAX = 86400
+
+
+def _clamp_int(n: int, lo: int, hi: int) -> int:
+    return max(lo, min(hi, n))
+
+
+def _pet_commit_bonus_sec(request: Request) -> int:
+    v = request.session.get("pet_commit_bonus_sec")
+    if isinstance(v, bool) or not isinstance(v, int):
+        return _PET_BONUS_DEFAULT
+    return _clamp_int(v, _PET_BONUS_MIN, _PET_BONUS_MAX)
+
+
+def _pet_initial_sec(request: Request) -> int:
+    v = request.session.get("pet_initial_sec")
+    if isinstance(v, bool) or not isinstance(v, int):
+        return _PET_INITIAL_DEFAULT
+    return _clamp_int(v, _PET_INITIAL_MIN, _PET_INITIAL_MAX)
+
+
+def _activity_for_client(activity: dict[str, Any]) -> dict[str, Any]:
+    """Quita claves internas que no van en el JSON público."""
+    return {k: v for k, v in activity.items() if k != "last_push_at"}
+
+
+def _utc_today_iso() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _ensure_pet_lifecycle(request: Request, activity: dict[str, Any]) -> None:
+    """Inicializa `pet_expires_at` y suma tiempo por commits nuevos (mismo día UTC)."""
+    if not request.session.get("github_access_token"):
+        return
+    day = _utc_today_iso()
+    ct = int(activity.get("commits_today_utc", 0))
+    if "pet_expires_at" not in request.session:
+        request.session["pet_expires_at"] = time.time() + float(_pet_initial_sec(request))
+        request.session["pet_snap_day"] = day
+        request.session["pet_snap_commits_today"] = ct
+        return
+
+    exp_raw = request.session.get("pet_expires_at")
+    if not isinstance(exp_raw, (int, float)):
+        request.session["pet_expires_at"] = time.time() + float(_pet_initial_sec(request))
+        request.session["pet_snap_day"] = day
+        request.session["pet_snap_commits_today"] = ct
+        return
+
+    exp = float(exp_raw)
+    prev_day = request.session.get("pet_snap_day")
+    prev_ct = request.session.get("pet_snap_commits_today")
+
+    if prev_ct == -1 or not isinstance(prev_ct, int) or not isinstance(prev_day, str):
+        request.session["pet_snap_day"] = day
+        request.session["pet_snap_commits_today"] = ct
+        return
+
+    if prev_day != day:
+        request.session["pet_snap_day"] = day
+        request.session["pet_snap_commits_today"] = ct
+        return
+
+    now = time.time()
+    if ct > prev_ct and exp > now:
+        request.session["pet_expires_at"] = exp + float(ct - prev_ct) * float(_pet_commit_bonus_sec(request))
+    request.session["pet_snap_commits_today"] = ct
+
+
+def _build_pet_timer(request: Request, activity: dict[str, Any]) -> dict[str, Any] | None:
+    """Contador de vida + ajustes guardados en sesión (solo OAuth)."""
+    if not request.session.get("github_access_token"):
+        return None
+    exp_raw = request.session.get("pet_expires_at")
+    if not isinstance(exp_raw, (int, float)):
+        return None
+    now = time.time()
+    initial = _pet_initial_sec(request)
+    bonus = _pet_commit_bonus_sec(request)
+    sec_left = max(0, int(float(exp_raw) - now))
+    bar_den = max(initial, sec_left, 1)
+    return {
+        "seconds_remaining": sec_left,
+        "initial_sec": initial,
+        "commit_bonus_sec": bonus,
+        "window_sec": initial,
+        "grace_remaining_sec": 0,
+        "stale_in_sec": sec_left,
+        "commits_last_5m": int(activity.get("commits_last_5m", 0)),
+        "bar_denominator_sec": bar_den,
+    }
 
 
 def _sanitize_return_to(raw: str | None) -> str:
@@ -337,21 +434,22 @@ def auth_logout(request: Request, return_to: str | None = Query(default=None, ma
     return RedirectResponse(url=dest, status_code=302)
 
 
-def _mood_from_activity(activity: dict[str, int], pet_birth: float | None = None) -> dict[str, str]:
-    c24 = activity["contributions_last_24h"]
-    c7 = activity["contributions_last_7d"]
-    i7 = activity["interactions_last_7d"]
+def _mood_from_activity(
+    activity: dict[str, Any],
+    pet_expires_at: float | None = None,
+    pet_timer: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    c24 = int(activity["contributions_last_24h"])
+    c7 = int(activity["contributions_last_7d"])
+    i7 = int(activity["interactions_last_7d"])
     c5m = int(activity.get("commits_last_5m", 0))
     now = time.time()
-    win = max(1, _PET_COMMIT_WINDOW_SEC)
 
-    if pet_birth:
-        # Tras la gracia inicial: hace falta al menos un push con commits en la ventana (feed de eventos).
-        if (now - pet_birth) >= win and c5m == 0:
-            mins = (win + 59) // 60
+    if pet_expires_at is not None:
+        if now >= float(pet_expires_at):
             return {
                 "mood": "dead",
-                "message": f"Llevas más de {mins} min sin commits en GitHub. Has matado al gato :(",
+                "message": "Se acabó el tiempo de vida. Pulsa «Nuevo gato» o haz commits antes de que se agote otra vez.",
             }
 
     else:
@@ -360,6 +458,21 @@ def _mood_from_activity(activity: dict[str, int], pet_birth: float | None = None
                 "mood": "dead",
                 "message": "Has matado al gato :("
             }
+
+    if pet_expires_at is not None and pet_timer:
+        sec_left = int(pet_timer.get("seconds_remaining", 0))
+        initial = int(pet_timer.get("initial_sec", 300))
+        if sec_left > 0 and sec_left <= max(30, initial // 5):
+            return {
+                "mood": "angry",
+                "message": f"¡Queda poco! Solo ~{sec_left}s de vida. Haz un commit para sumar tiempo.",
+            }
+        if sec_left > 0 and c7 <= 2 and c24 == 0 and c5m > 0:
+            return {
+                "mood": "angry",
+                "message": "Poca actividad esta semana… Un push ayuda; el gato está triste.",
+            }
+
     if c7 >= 20 or c24 >= 8:
         return {
             "mood": "happy",
@@ -393,14 +506,23 @@ def api_status(request: Request):
             fetcher = GithubFetcher(token=str(session_token))
         else:
             fetcher = GithubFetcher()
-        activity = fetcher.activity_metrics(max_event_pages=15)
-        pet_birth = request.session.get("pet_birth")
-        mood = _mood_from_activity(activity, pet_birth)
+        activity_raw = fetcher.activity_metrics(max_event_pages=15)
+        if session_token:
+            _ensure_pet_lifecycle(request, activity_raw)
+        activity = _activity_for_client(activity_raw)
+        pet_exp = request.session.get("pet_expires_at")
+        pet_exp_f = float(pet_exp) if isinstance(pet_exp, (int, float)) else None
+        pet_timer = _build_pet_timer(request, activity_raw) if session_token else None
+        mood = _mood_from_activity(activity, pet_exp_f, pet_timer)
         logger.info(
             "GET /api/status → mood=%s c7d=%s (ver líneas «GitHub» si hay ceros)",
             mood.get("mood"),
             activity.get("contributions_last_7d"),
         )
+        out: dict[str, Any] = {"activity": activity, "mood": mood}
+        if pet_timer is not None:
+            out["pet_timer"] = pet_timer
+        return out
     except ValueError as e:
         err = str(e)
         auth_hint = (
@@ -443,16 +565,64 @@ def api_status(request: Request):
                 "message": f"GitHub no disponible: {e}. Revisa token o conexión.",
             },
         }
-    return {"activity": activity, "mood": mood}
 
 
 @app.post("/api/reset_pet")
 def api_reset_pet(request: Request):
-    # Resetting pet birth time to create a new pet
     if not request.session.get("github_access_token"):
         return JSONResponse(status_code=401, content={"detail": "not_authenticated"})
-    request.session["pet_birth"] = time.time()
+    now = time.time()
+    request.session["pet_birth"] = now
+    request.session["pet_expires_at"] = now + float(_pet_initial_sec(request))
+    request.session["pet_snap_commits_today"] = -1
+    request.session["pet_snap_day"] = _utc_today_iso()
     return {"status": "pet_reset"}
+
+
+@app.get("/api/pet_config")
+def api_pet_config_get(request: Request):
+    if not request.session.get("github_access_token"):
+        return JSONResponse(status_code=401, content={"detail": "not_authenticated"})
+    return {
+        "commit_bonus_sec": _pet_commit_bonus_sec(request),
+        "initial_sec": _pet_initial_sec(request),
+    }
+
+
+@app.post("/api/pet_config")
+async def api_pet_config_post(request: Request):
+    if not request.session.get("github_access_token"):
+        return JSONResponse(status_code=401, content={"detail": "not_authenticated"})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content={"detail": "invalid_json"})
+    out: dict[str, int] = {}
+    if "commit_bonus_sec" in body:
+        try:
+            b = int(body["commit_bonus_sec"])
+        except (TypeError, ValueError):
+            return JSONResponse(status_code=400, content={"detail": "commit_bonus_sec_invalid"})
+        out["commit_bonus_sec"] = _clamp_int(b, _PET_BONUS_MIN, _PET_BONUS_MAX)
+    if "initial_sec" in body:
+        try:
+            i = int(body["initial_sec"])
+        except (TypeError, ValueError):
+            return JSONResponse(status_code=400, content={"detail": "initial_sec_invalid"})
+        out["initial_sec"] = _clamp_int(i, _PET_INITIAL_MIN, _PET_INITIAL_MAX)
+    if not out:
+        return JSONResponse(status_code=400, content={"detail": "no_fields"})
+    if "commit_bonus_sec" in out:
+        request.session["pet_commit_bonus_sec"] = out["commit_bonus_sec"]
+    if "initial_sec" in out:
+        request.session["pet_initial_sec"] = out["initial_sec"]
+    return {
+        "ok": True,
+        "commit_bonus_sec": _pet_commit_bonus_sec(request),
+        "initial_sec": _pet_initial_sec(request),
+    }
 
 
 def _mount_frontend() -> None:

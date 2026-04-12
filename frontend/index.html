@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tamagotchi GitHub</title>
-    <link rel="stylesheet" href="css/style.css?v=8" />
+    <link rel="stylesheet" href="css/style.css?v=11" />
   </head>
   <body>
     <div class="auth-gate" data-auth-gate hidden>
@@ -58,10 +58,7 @@
     <div class="app" data-app>
       <header class="app__header">
         <h1 class="app__title">Tamagotchi GitHub</h1>
-        <p class="app__subtitle">
-          Humor según tu <strong>actividad general en GitHub</strong> (toda tu cuenta), no un solo
-          repositorio local
-        </p>
+        <p class="app__subtitle">Estado del gato, contador de supervivencia y commits de hoy (UTC).</p>
         <p class="app__logout" data-session-logout hidden>
           <a href="/auth/logout" class="app__logout-link" data-auth-logout-link>Cerrar sesión</a>
         </p>
@@ -82,6 +79,12 @@
             />
           </div>
           <p class="mood-text" data-mood-text aria-live="polite">Cargando…</p>
+          <div class="pet-timer" data-pet-timer hidden>
+            <p class="pet-timer__label" data-pet-timer-label></p>
+            <div class="pet-timer__track" data-pet-timer-track hidden>
+              <div class="pet-timer__fill" data-pet-timer-fill></div>
+            </div>
+          </div>
           <div class="connect-banner" data-connect-banner hidden>
             <p class="connect-banner__hint" data-device-hint hidden></p>
             <div class="device-flow-panel device-flow-panel--banner" data-device-flow-panel hidden>
@@ -120,24 +123,41 @@
               </button>
             </div>
           </div>
-          <dl class="stats">
-            <dt>Commits hoy (UTC, fecha del push)</dt>
-            <dd data-stat-github-today>—</dd>
-            <dt>Commits esta semana (lun–dom UTC)</dt>
-            <dd data-stat-github-week>—</dd>
-            <dt>Contribuciones GitHub (~24 h, rolling)</dt>
-            <dd data-stat-github-24>—</dd>
-            <dt>Contribuciones GitHub (7 d, rolling)</dt>
-            <dd data-stat-github-7>—</dd>
-            <dt>Interacciones GitHub (7 d)</dt>
-            <dd data-stat-github-interactions-7>—</dd>
-            <dt>Commits en feed de eventos (suma en páginas leídas)</dt>
-            <dd data-stat-github-feed>—</dd>
-          </dl>
-          <p class="stats__hint">
-            Los números salen de la API de eventos de GitHub (PushEvent). «Feed» = todo lo recogido al paginar
-            <code>/users/…/events</code>; no es el histórico completo de la cuenta.
-          </p>
+          <div class="commits-today" aria-live="polite">
+            <span class="commits-today__label">Commits hoy (UTC)</span>
+            <span class="commits-today__value" data-stat-github-today>—</span>
+          </div>
+          <details class="app-config" data-app-config hidden>
+            <summary class="app-config__summary">Configuración</summary>
+            <form class="app-config__form" data-pet-config-form>
+              <label class="app-config__field">
+                <span class="app-config__field-label">Tiempo inicial (segundos)</span>
+                <input
+                  class="app-config__input"
+                  type="number"
+                  name="initial_sec"
+                  min="30"
+                  max="86400"
+                  step="1"
+                  required
+                />
+              </label>
+              <label class="app-config__field">
+                <span class="app-config__field-label">Segundos que suma cada commit hoy</span>
+                <input
+                  class="app-config__input"
+                  type="number"
+                  name="commit_bonus_sec"
+                  min="1"
+                  max="86400"
+                  step="1"
+                  required
+                />
+              </label>
+              <button type="submit" class="btn btn--secondary app-config__submit">Guardar</button>
+              <p class="app-config__msg" data-pet-config-msg aria-live="polite"></p>
+            </form>
+          </details>
         </div>
         <div class="device__actions" data-device-actions hidden>
           <button type="button" class="btn btn--secondary" data-action-reset-pet hidden>
@@ -147,10 +167,7 @@
       </div>
 
       <p class="mock-hint" data-mock-hint hidden>
-        Modo <strong>mock</strong> (<code>?mock=1</code>): datos ficticios sin llamar al API. En
-        uso normal, ejecutad <code>python main.py</code> y abrid la app sin ese parámetro. Contrato
-        del backend: <code>docs/BACKEND.md</code>. Mapeo de campos JSON:
-        <code>shared/status.js</code> → <code>normalizeStatusPayload</code>.
+        Modo <strong>mock</strong> (<code>?mock=1</code>): datos ficticios. Normal: <code>python main.py</code>.
       </p>
     </div>
 
@@ -159,6 +176,6 @@
       const hint = document.querySelector("[data-mock-hint]");
       if (hint && isMockMode()) hint.hidden = false;
     </script>
-    <script src="js/app.js?v=13" type="module"></script>
+    <script src="js/app.js?v=17" type="module"></script>
   </body>
 </html>

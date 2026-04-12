@@ -24,17 +24,31 @@ const MOCK_STATUS = {
     mood: "happy",
     message: "¡Buen ritmo en GitHub! Sigue contribuyendo.",
   },
+  pet_timer: {
+    seconds_remaining: 180,
+    initial_sec: 300,
+    commit_bonus_sec: 60,
+    window_sec: 300,
+    grace_remaining_sec: 0,
+    stale_in_sec: 180,
+    bar_denominator_sec: 300,
+    commits_last_5m: 1,
+  },
 };
 
 export { normalizeStatusPayload };
+
+function apiUrl(path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const base = API_CONFIG.baseUrl.replace(/\/$/, "");
+  return base ? `${base}${p}` : p;
+}
 
 function buildStatusUrl() {
   const path = API_CONFIG.endpoints.status.startsWith("/")
     ? API_CONFIG.endpoints.status
     : `/${API_CONFIG.endpoints.status}`;
-  const base = API_CONFIG.baseUrl.replace(/\/$/, "");
-  if (!base) return path;
-  return `${base}${path}`;
+  return apiUrl(path);
 }
 
 function delay(ms) {
@@ -120,10 +134,7 @@ export async function resetPet() {
   if (isMockMode()) {
     return { status: "pet_reset" };
   }
-  const path = "/api/reset_pet";
-  const base = API_CONFIG.baseUrl.replace(/\/$/, "");
-  const url = base ? `${base}${path}` : path;
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl("/api/reset_pet"), {
     method: "POST",
     credentials: "include",
     headers: { Accept: "application/json" },
@@ -131,6 +142,53 @@ export async function resetPet() {
   if (res.status === 401) {
     throw new Error("Hace falta sesión con GitHub para reiniciar la mascota.");
   }
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      if (j && typeof j.detail === "string") detail = j.detail;
+    } catch {
+      /* */
+    }
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * @returns {Promise<{ commit_bonus_sec: number, initial_sec: number }>}
+ */
+export async function fetchPetConfig() {
+  if (isMockMode()) {
+    return { commit_bonus_sec: 60, initial_sec: 300 };
+  }
+  const res = await fetch(apiUrl("/api/pet_config"), {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * @param {{ commit_bonus_sec?: number, initial_sec?: number }} body
+ */
+export async function savePetConfig(body) {
+  if (isMockMode()) {
+    return {
+      ok: true,
+      commit_bonus_sec: body.commit_bonus_sec ?? 60,
+      initial_sec: body.initial_sec ?? 300,
+    };
+  }
+  const res = await fetch(apiUrl("/api/pet_config"), {
+    method: "POST",
+    credentials: "include",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
     let detail = "";
     try {

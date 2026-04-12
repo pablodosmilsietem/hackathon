@@ -17,9 +17,20 @@
  * @property {Mood} mood
  * @property {string} message
  *
+ * @typedef {Object} PetTimer
+ * @property {number} seconds_remaining tiempo de vida restante (segundos)
+ * @property {number} initial_sec tiempo inicial al conectar / reset
+ * @property {number} commit_bonus_sec segundos que suma cada commit nuevo hoy
+ * @property {number} [bar_denominator_sec] para la barra de progreso
+ * @property {number} [window_sec] alias legacy
+ * @property {number} [grace_remaining_sec]
+ * @property {number|null} [stale_in_sec]
+ * @property {number} [commits_last_5m]
+ *
  * @typedef {Object} StatusPayload
  * @property {GitHubActivity} activity
  * @property {MoodState} mood
+ * @property {PetTimer} [petTimer] solo OAuth con mascota
  * @property {string} [authHint] p.ej. needs_github_connect (falta token/OAuth en servidor)
  */
 
@@ -69,6 +80,36 @@ export function normalizeStatusPayload(data) {
   const authHint =
     typeof raw.auth_hint === "string" && raw.auth_hint.length > 0 ? raw.auth_hint : undefined;
 
+  /** @type {PetTimer | undefined} */
+  let petTimer;
+  const pr = raw.pet_timer;
+  if (pr && typeof pr === "object" && "seconds_remaining" in /** @type {object} */ (pr)) {
+    const pt = /** @type {Record<string, unknown>} */ (pr);
+    const seconds_remaining = toNonNegInt(pt.seconds_remaining);
+    const initial_sec = Math.max(
+      1,
+      toNonNegInt(pt.initial_sec) || toNonNegInt(pt.window_sec) || 300,
+    );
+    const window_sec = Math.max(1, toNonNegInt(pt.window_sec) || initial_sec);
+    const commit_bonus_sec = toNonNegInt(pt.commit_bonus_sec);
+    const bar_den = toNonNegInt(pt.bar_denominator_sec);
+    const grace = Math.max(0, toNonNegInt(pt.grace_remaining_sec));
+    let stale_in_sec = null;
+    if (pt.stale_in_sec != null && pt.stale_in_sec !== "") {
+      stale_in_sec = toNonNegInt(pt.stale_in_sec);
+    }
+    petTimer = {
+      seconds_remaining,
+      initial_sec,
+      commit_bonus_sec,
+      window_sec,
+      grace_remaining_sec: grace,
+      stale_in_sec: stale_in_sec ?? seconds_remaining,
+      commits_last_5m: pickActivityInt(pt, ["commits_last_5m"]),
+      ...(bar_den > 0 ? { bar_denominator_sec: bar_den } : {}),
+    };
+  }
+
   return {
     activity: {
       contributions_last_24h: pickActivityInt(activity, [
@@ -97,6 +138,7 @@ export function normalizeStatusPayload(data) {
       message: typeof mood.message === "string" ? mood.message : "",
     },
     ...(authHint ? { authHint } : {}),
+    ...(petTimer ? { petTimer } : {}),
   };
 }
 

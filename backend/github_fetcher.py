@@ -38,6 +38,11 @@ query($from: DateTime!, $to: DateTime!) {
 """
 
 
+def _commit_window_seconds() -> int:
+    """Misma ventana que `TAMAGOTCHI_COMMIT_WINDOW_SEC` en main (commits recientes + muerte del gato)."""
+    return max(1, int(os.environ.get("TAMAGOTCHI_COMMIT_WINDOW_SEC", str(5 * 60))))
+
+
 def _github_terminal_logs_enabled() -> bool:
     """Logs detallados en consola (cada /api/status). Desactivar: TAMAGOTCHI_GITHUB_LOG=0"""
     return os.environ.get("TAMAGOTCHI_GITHUB_LOG", "1").strip().lower() not in (
@@ -329,7 +334,7 @@ class GithubFetcher:
             "iso_week_total": iso_week_total,
         }
 
-    def activity_metrics(self, *, max_event_pages: int = 15) -> dict[str, int]:
+    def activity_metrics(self, *, max_event_pages: int = 15) -> dict[str, Any]:
         """
         Métricas alineadas con docs/BACKEND.md.
         contributions_* cuentan commits de PushEvent; interactions_* cuentan otros eventos en 7 d.
@@ -341,7 +346,8 @@ class GithubFetcher:
         now = datetime.now(timezone.utc)
         cut24 = now - timedelta(hours=24)
         cut7 = now - timedelta(days=7)
-        cut5m = now - timedelta(minutes=5)
+        win_sec = _commit_window_seconds()
+        cut_window = now - timedelta(seconds=win_sec)
         start_day = _utc_start_of_day(now)
         start_week = _utc_start_of_iso_week(now)
         commits_24h = 0
@@ -353,6 +359,7 @@ class GithubFetcher:
         interactions_7d = 0
         total_events = 0
         push_events = 0
+        last_push_at: float | None = None
 
         for ev in self.iter_events(max_pages=max_event_pages):
             total_events += 1
@@ -367,7 +374,10 @@ class GithubFetcher:
                 payload = ev.get("payload") if isinstance(ev.get("payload"), dict) else {}
                 n = self._push_commit_count(payload)
                 commits_in_feed += n
-                if t >= cut5m:
+                ts = t.timestamp()
+                if last_push_at is None or ts > last_push_at:
+                    last_push_at = ts
+                if t >= cut_window:
                     commits_last_5m += n
                 if t >= start_day:
                     commits_today += n
@@ -432,7 +442,7 @@ class GithubFetcher:
                 "sí" if gq else "no",
             )
 
-        return {
+        out: dict[str, Any] = {
             "contributions_last_24h": commits_24h,
             "contributions_last_7d": commits_7d,
             "commits_last_5m": commits_last_5m,
@@ -441,3 +451,6 @@ class GithubFetcher:
             "commits_this_week_utc": commits_this_week,
             "commits_in_events_feed": commits_in_feed,
         }
+        if last_push_at is not None:
+            out["last_push_at"] = last_push_at
+        return out

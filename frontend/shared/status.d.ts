@@ -1,5 +1,16 @@
 export type Mood = "happy" | "neutral" | "angry" | "dead";
 
+export interface PetTimer {
+  seconds_remaining: number;
+  initial_sec: number;
+  commit_bonus_sec: number;
+  window_sec: number;
+  grace_remaining_sec: number;
+  stale_in_sec: number | null;
+  commits_last_5m: number;
+  bar_denominator_sec?: number;
+}
+
 export interface StatusPayload {
   activity: {
     contributions_last_24h: number;
@@ -14,6 +25,7 @@ export interface StatusPayload {
     mood: Mood;
     message: string;
   };
+  petTimer?: PetTimer;
 }
 
 export declare const MOOD_EMOJI: Record<Mood, string>;
